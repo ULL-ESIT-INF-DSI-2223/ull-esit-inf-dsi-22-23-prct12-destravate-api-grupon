@@ -1,0 +1,15 @@
+{
+  "include": ["**/*"],
+  "exclude": ["./tests", "./node_modules", "./dist"],
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "node16",
+    "rootDir": "./src",
+    "declaration": true,
+    "outDir": "./dist",
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "strictPropertyInitialization": true
+  }
+}

@@ -1,13 +1,14 @@
 import { Document, Schema, model } from "mongoose";
+import { UserDocumentInterface } from "./user.js";
 
-interface TrackDocumentInterface extends Document {
+export interface TrackDocumentInterface extends Document {
   id: number;
   name: string;
   beginning_coords: [number, number];
   ending_coords: [number, number];
   length: number;
   slope: number;
-  users: string[];
+  users: UserDocumentInterface[];
   activity_type: "Correr" | "Bicicleta";
   average_score: number;
 }
@@ -77,8 +78,9 @@ const TrackSchema = new Schema<TrackDocumentInterface>({
     },
   },
   users: {
-    type: [String],
+    type: [Schema.Types.ObjectId],
     required: true,
+    ref: "User",
   },
   activity_type: {
     type: String,
@@ -99,4 +101,4 @@ const TrackSchema = new Schema<TrackDocumentInterface>({
   },
 });
 
-export const Track = model<TrackDocumentInterface>("Ruta", TrackSchema);
+export const Track = model<TrackDocumentInterface>("Track", TrackSchema);

@@ -1,19 +1,31 @@
 import express from "express";
 import { Track } from "../models/track.js";
+import { User } from "../models/user.js";
 
 export const trackRouter = express.Router();
 
-trackRouter.post("/tracks", (req, res) => {
-  const track = new Track(req.body);
+trackRouter.post("/tracks", async (req, res) => {
+  try {
+    const track = new Track(req.body);
 
-  track
-    .save()
-    .then((track) => {
-      res.status(201).send(track);
-    })
-    .catch((error) => {
-      res.status(400).send(error);
-    });
+    for (let index = 0; index < track.users.length; index++) {
+      const user = await User.findOne({
+        id: track.users[index],
+      });
+      if (!user) {
+        return res.status(404).send({
+          error: `El usuario ${index} de la ruta introducida no existe`,
+        });
+      } else {
+        track.users[index] = user._id;
+      }
+    }
+
+    await track.save();
+    return res.status(201).send(track);
+  } catch (error) {
+    return res.status(400).send(error);
+  }
 });
 
 trackRouter.get("/tracks", (req, res) => {

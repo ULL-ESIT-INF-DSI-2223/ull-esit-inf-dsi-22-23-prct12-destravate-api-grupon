@@ -16,6 +16,7 @@ export interface UserDocumentInterface extends Document {
 const UserSchema = new Schema<UserDocumentInterface>({
   id: {
     type: String,
+    unique: true,
     required: true,
     trim: true,
   },

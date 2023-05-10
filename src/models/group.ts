@@ -4,45 +4,38 @@ import {
   HistoricalElementDocumentInterface,
   HistoricalElementSchema,
 } from "./historical_element.js";
+import { UserDocumentInterface } from "./user.js";
 
-export interface UserDocumentInterface extends Document {
-  id: string;
+export interface GroupDocumentInterface extends Document {
+  id: number;
   name: string;
-  activity_type: "Correr" | "Bicicleta";
-  friends: UserDocumentInterface[];
-  groups: number[];
+  participants: UserDocumentInterface[];
   statistics: [[number, number], [number, number], [number, number]];
+  ranking: UserDocumentInterface[];
   favourite_tracks: TrackDocumentInterface[];
-  active_challenges: number[];
   tracks_historical: HistoricalElementDocumentInterface[];
 }
 
-const UserSchema = new Schema<UserDocumentInterface>({
+const GroupSchema = new Schema<GroupDocumentInterface>({
   id: {
-    type: String,
+    type: Number,
     unique: true,
     required: true,
-    trim: true,
+    validate: (value: number) => {
+      if (value < 0 || value % 1 !== 0) {
+        throw new Error("El ID de la ruta debe ser un entero positivo");
+      }
+    },
   },
   name: {
     type: String,
     required: true,
     trim: true,
   },
-  activity_type: {
-    type: String,
-    required: true,
-    default: "Correr",
-    enum: ["Correr", "Bicicleta"],
-  },
-  friends: {
+  participants: {
     type: [Schema.Types.ObjectId],
     required: true,
     ref: "User",
-  },
-  groups: {
-    type: [Number],
-    required: true,
   },
   statistics: {
     type: [[Number]],
@@ -82,14 +75,15 @@ const UserSchema = new Schema<UserDocumentInterface>({
       }
     },
   },
+  ranking: {
+    type: [Schema.Types.ObjectId],
+    required: true,
+    ref: "User",
+  },
   favourite_tracks: {
     type: [Schema.Types.ObjectId],
     required: true,
     ref: "Track",
-  },
-  active_challenges: {
-    type: [Number],
-    required: true,
   },
   tracks_historical: {
     type: [HistoricalElementSchema],
@@ -97,4 +91,4 @@ const UserSchema = new Schema<UserDocumentInterface>({
   },
 });
 
-export const User = model<UserDocumentInterface>("User", UserSchema);
+export const Group = model<GroupDocumentInterface>("Group", GroupSchema);

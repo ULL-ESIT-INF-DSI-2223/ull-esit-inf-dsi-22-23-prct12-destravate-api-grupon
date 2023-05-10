@@ -1,6 +1,7 @@
 import express from "express";
 import { Track, TrackDocumentInterface } from "../models/track.js";
 import { User, UserDocumentInterface } from "../models/user.js";
+import { HistoricalElementDocumentInterface } from "../models/historical_element.js";
 
 export const trackRouter = express.Router();
 
@@ -190,32 +191,40 @@ trackRouter.patch("/tracks/:id", async (req, res) => {
 
 trackRouter.delete("/tracks", async (req, res) => {
   try {
+    // Name is required
     if (!req.query.name) {
       return res.status(400).send({
         error: "Se debe proporcionar un nombre",
       });
     } else {
+      // If track exist we proceed if not sent not found
       const track = await Track.findOneAndDelete({
         name: req.query.name.toString(),
       });
       if (!track) {
         return res.status(404).send();
       } else {
+        // List of all Users
         const user_list = await User.find();
 
+        // Search if any user has this route in his historical or in favourites
         for (let i = 0; i < user_list.length; i++) {
           let found_favourite = false;
           let found_historical = false;
           const favourite_user_tracks: TrackDocumentInterface[] = [];
-          const user_tracks_historical: [Date, TrackDocumentInterface][] = [];
+          const user_tracks_historical: HistoricalElementDocumentInterface[] =
+            [];
 
+          // Check favourites
           for (let j = 0; j < user_list[i].favourite_tracks.length; j++) {
-            if (user_list[i].favourite_tracks[j] === track._id) {
+            if (user_list[i].favourite_tracks[j].equals(track._id)) {
               found_favourite = true;
             } else {
               favourite_user_tracks.push(user_list[i].favourite_tracks[j]);
             }
           }
+
+          // If found we update favourites
           if (found_favourite) {
             await User.findByIdAndUpdate(
               user_list[i]._id,
@@ -227,14 +236,15 @@ trackRouter.delete("/tracks", async (req, res) => {
             );
           }
 
+          // Check historical
           for (let j = 0; j < user_list[i].tracks_historical.length; j++) {
-            if (user_list[i].tracks_historical[j][1] === track._id) {
+            if (user_list[i].tracks_historical[j].track.equals(track._id)) {
               found_historical = true;
             } else {
               user_tracks_historical.push(user_list[i].tracks_historical[j]);
             }
           }
-
+          // If found we update historical
           if (found_historical) {
             await User.findByIdAndUpdate(
               user_list[i]._id,
@@ -247,6 +257,10 @@ trackRouter.delete("/tracks", async (req, res) => {
           }
         }
 
+        await track.populate({
+          path: "users",
+          select: ["id", "name"],
+        });
         return res.send(track);
       }
     }
@@ -255,16 +269,71 @@ trackRouter.delete("/tracks", async (req, res) => {
   }
 });
 
-trackRouter.delete("/tracks/:id", (req, res) => {
-  Track.findOneAndDelete({ id: req.params.id })
-    .then((track) => {
-      if (!track) {
-        res.status(404).send();
-      } else {
-        res.send(track);
+trackRouter.delete("/tracks/:id", async (req, res) => {
+  try {
+    // If track exist we proceed if not sent not found
+    const track = await Track.findOneAndDelete({ id: req.params.id });
+    if (!track) {
+      return res.status(404).send();
+    } else {
+      // List of all Users
+      const user_list = await User.find();
+
+      // Search if any user has this route in his historical or in favourites
+      for (let i = 0; i < user_list.length; i++) {
+        let found_favourite = false;
+        let found_historical = false;
+        const favourite_user_tracks: TrackDocumentInterface[] = [];
+        const user_tracks_historical: HistoricalElementDocumentInterface[] = [];
+
+        // Check favourites
+        for (let j = 0; j < user_list[i].favourite_tracks.length; j++) {
+          if (user_list[i].favourite_tracks[j].equals(track._id)) {
+            found_favourite = true;
+          } else {
+            favourite_user_tracks.push(user_list[i].favourite_tracks[j]);
+          }
+        }
+
+        // If found we update favourites
+        if (found_favourite) {
+          await User.findByIdAndUpdate(
+            user_list[i]._id,
+            { favourite_tracks: favourite_user_tracks },
+            {
+              new: true,
+              runValidators: true,
+            }
+          );
+        }
+
+        // Check historical
+        for (let j = 0; j < user_list[i].tracks_historical.length; j++) {
+          if (user_list[i].tracks_historical[j].track.equals(track._id)) {
+            found_historical = true;
+          } else {
+            user_tracks_historical.push(user_list[i].tracks_historical[j]);
+          }
+        }
+        // If found we update historical
+        if (found_historical) {
+          await User.findByIdAndUpdate(
+            user_list[i]._id,
+            { tracks_historical: user_tracks_historical },
+            {
+              new: true,
+              runValidators: true,
+            }
+          );
+        }
       }
-    })
-    .catch(() => {
-      res.status(400).send();
-    });
+      await track.populate({
+        path: "users",
+        select: ["id", "name"],
+      });
+      return res.send(track);
+    }
+  } catch (error) {
+    return res.status(500).send(error);
+  }
 });

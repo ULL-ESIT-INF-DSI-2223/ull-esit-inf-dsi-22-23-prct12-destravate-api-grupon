@@ -6,6 +6,7 @@ import {
   HistoricalElementDocumentInterface,
 } from "../models/historical_element.js";
 import { Group, GroupDocumentInterface } from "../models/group.js";
+import { Challenge, ChallengeDocumentInterface } from "../models/challenge.js";
 
 export const userRouter = express.Router();
 
@@ -15,17 +16,21 @@ userRouter.post("/users", async (req, res) => {
     let friends: UserDocumentInterface[] = [];
     let groups: GroupDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
+    let active_challenges: ChallengeDocumentInterface[] = [];
     let tracks_historical: HistoricalElementDocumentInterface[] = [];
     try {
       friends = await checkFriends(req.body.friends);
       groups = await checkGroups(req.body.groups);
       favourite_tracks = await checkFavouriteTracks(req.body.favourite_tracks);
+      active_challenges = await checkActiveChallenges(
+        req.body.active_challenges
+      );
       tracks_historical = await checkTracksHistorical(
         req.body.tracks_historical
       );
     } catch (error) {
       return res.status(404).send({
-        error: error,
+        error: error.message,
       });
     }
     // Adds the user to the database
@@ -34,6 +39,7 @@ userRouter.post("/users", async (req, res) => {
       friends: friends,
       groups: groups,
       favourite_tracks: favourite_tracks,
+      active_challenges: active_challenges,
       tracks_historical: tracks_historical,
     });
     await user.save();
@@ -43,9 +49,16 @@ userRouter.post("/users", async (req, res) => {
     });
     // Adds the user database id to the other schemas
     if (user_saved) {
-      addIdToFriends(user_saved._id, user_saved.friends);
-      addIdToGroups(user_saved._id, user_saved.groups);
-      addIdToTracksHistorical(user_saved._id, user_saved.tracks_historical);
+      await addIdToFriends(user_saved._id, user_saved.friends);
+      await addIdToGroups(user_saved._id, user_saved.groups);
+      await addIdToActiveChallenges(
+        user_saved._id,
+        user_saved.active_challenges
+      );
+      await addIdToTracksHistorical(
+        user_saved._id,
+        user_saved.tracks_historical
+      );
     }
 
     await user.populate({
@@ -58,6 +71,10 @@ userRouter.post("/users", async (req, res) => {
     });
     await user.populate({
       path: "favourite_tracks",
+      select: ["id", "name"],
+    });
+    await user.populate({
+      path: "active_challenges",
       select: ["id", "name"],
     });
     await user.populate({
@@ -80,7 +97,15 @@ userRouter.get("/users", async (req, res) => {
         select: ["id", "name"],
       })
       .populate({
+        path: "groups",
+        select: ["id", "name"],
+      })
+      .populate({
         path: "favourite_tracks",
+        select: ["id", "name"],
+      })
+      .populate({
+        path: "active_challenges",
         select: ["id", "name"],
       })
       .populate({
@@ -107,7 +132,15 @@ userRouter.get("/users/:id", async (req, res) => {
         select: ["id", "name"],
       })
       .populate({
+        path: "groups",
+        select: ["id", "name"],
+      })
+      .populate({
         path: "favourite_tracks",
+        select: ["id", "name"],
+      })
+      .populate({
+        path: "active_challenges",
         select: ["id", "name"],
       })
       .populate({
@@ -155,16 +188,20 @@ userRouter.patch("/users", async (req, res) => {
     // Checks if elements from body exists in database
     let friends: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
+    let active_challenges: ChallengeDocumentInterface[] = [];
     let tracks_historical: HistoricalElementDocumentInterface[] = [];
     try {
       friends = await checkFriends(req.body.friends);
       favourite_tracks = await checkFavouriteTracks(req.body.favourite_tracks);
+      active_challenges = await checkActiveChallenges(
+        req.body.active_challenges
+      );
       tracks_historical = await checkTracksHistorical(
         req.body.tracks_historical
       );
     } catch (error) {
       return res.status(404).send({
-        error: error,
+        error: error.message,
       });
     }
 
@@ -175,6 +212,7 @@ userRouter.patch("/users", async (req, res) => {
         ...req.body,
         friends: friends,
         favourite_tracks: favourite_tracks,
+        active_challenges: active_challenges,
         tracks_historical: tracks_historical,
       },
       {
@@ -194,7 +232,15 @@ userRouter.patch("/users", async (req, res) => {
         select: ["id", "name"],
       });
       await new_user.populate({
+        path: "groups",
+        select: ["id", "name"],
+      });
+      await new_user.populate({
         path: "favourite_tracks",
+        select: ["id", "name"],
+      });
+      await new_user.populate({
+        path: "active_challenges",
         select: ["id", "name"],
       });
       await new_user.populate({
@@ -234,16 +280,20 @@ userRouter.patch("/users/:id", async (req, res) => {
     // Checks if elements from body exists in database
     let friends: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
+    let active_challenges: ChallengeDocumentInterface[] = [];
     let tracks_historical: HistoricalElementDocumentInterface[] = [];
     try {
       friends = await checkFriends(req.body.friends);
       favourite_tracks = await checkFavouriteTracks(req.body.favourite_tracks);
+      active_challenges = await checkActiveChallenges(
+        req.body.active_challenges
+      );
       tracks_historical = await checkTracksHistorical(
         req.body.tracks_historical
       );
     } catch (error) {
       return res.status(404).send({
-        error: error,
+        error: error.message,
       });
     }
 
@@ -254,6 +304,7 @@ userRouter.patch("/users/:id", async (req, res) => {
         ...req.body,
         friends: friends,
         favourite_tracks: favourite_tracks,
+        active_challenges: active_challenges,
         tracks_historical: tracks_historical,
       },
       {
@@ -273,7 +324,15 @@ userRouter.patch("/users/:id", async (req, res) => {
         select: ["id", "name"],
       });
       await new_user.populate({
+        path: "groups",
+        select: ["id", "name"],
+      });
+      await new_user.populate({
         path: "favourite_tracks",
+        select: ["id", "name"],
+      });
+      await new_user.populate({
+        path: "active_challenges",
         select: ["id", "name"],
       });
       await new_user.populate({
@@ -353,6 +412,10 @@ async function deleteUser(userID?: string, userName?: string) {
     select: ["id", "name"],
   });
   await user.populate({
+    path: "groups",
+    select: ["id", "name"],
+  });
+  await user.populate({
     path: "favourite_tracks",
     select: ["id", "name"],
   });
@@ -364,6 +427,9 @@ async function deleteUser(userID?: string, userName?: string) {
 }
 
 async function checkFriends(body_friends: string[]) {
+  body_friends = body_friends.filter(function (elem, index, self) {
+    return index === self.indexOf(elem);
+  });
   const friends: UserDocumentInterface[] = [];
   for (let index = 0; index < body_friends.length; index++) {
     const friend = await User.findOne({
@@ -379,6 +445,9 @@ async function checkFriends(body_friends: string[]) {
 }
 
 async function checkGroups(body_groups: number[]) {
+  body_groups = body_groups.filter(function (elem, index, self) {
+    return index === self.indexOf(elem);
+  });
   const groups: GroupDocumentInterface[] = [];
   for (let index = 0; index < body_groups.length; index++) {
     const group = await Group.findOne({
@@ -394,6 +463,13 @@ async function checkGroups(body_groups: number[]) {
 }
 
 async function checkFavouriteTracks(body_favourite_tracks: number[]) {
+  body_favourite_tracks = body_favourite_tracks.filter(function (
+    elem,
+    index,
+    self
+  ) {
+    return index === self.indexOf(elem);
+  });
   const favourite_tracks: TrackDocumentInterface[] = [];
   for (let index = 0; index < body_favourite_tracks.length; index++) {
     const favourite_track = await Track.findOne({
@@ -408,6 +484,30 @@ async function checkFavouriteTracks(body_favourite_tracks: number[]) {
     }
   }
   return favourite_tracks;
+}
+
+async function checkActiveChallenges(body_active_challenges: number[]) {
+  body_active_challenges = body_active_challenges.filter(function (
+    elem,
+    index,
+    self
+  ) {
+    return index === self.indexOf(elem);
+  });
+  const active_challenges: ChallengeDocumentInterface[] = [];
+  for (let index = 0; index < body_active_challenges.length; index++) {
+    const active_challenge = await Challenge.findOne({
+      id: body_active_challenges[index],
+    });
+    if (!active_challenge) {
+      throw new Error(
+        `El reto activo ${index} del usuario introducido no existe`
+      );
+    } else {
+      active_challenges.push(active_challenge._id);
+    }
+  }
+  return active_challenges;
 }
 
 async function checkTracksHistorical(
@@ -439,17 +539,18 @@ async function addIdToFriends(
   friends: UserDocumentInterface[]
 ) {
   for (let index = 0; index < friends.length; index++) {
-    const friend = await User.findById(friends[index]);
-    if (friend) {
-      await User.updateOne(
-        { _id: friend._id },
-        { friends: friend.friends.concat([user_id]) },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-    }
+    await User.updateOne(
+      { _id: friends[index] },
+      {
+        $addToSet: {
+          friends: user_id,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
   }
 }
 
@@ -458,17 +559,38 @@ async function addIdToGroups(
   groups: GroupDocumentInterface[]
 ) {
   for (let index = 0; index < groups.length; index++) {
-    const group = await Group.findById(groups[index]);
-    if (group) {
-      await Group.updateOne(
-        { _id: group._id },
-        { participants: group.participants.concat([user_id]) },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-    }
+    await Group.updateOne(
+      { _id: groups[index] },
+      {
+        $addToSet: {
+          participants: user_id,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+  }
+}
+
+async function addIdToActiveChallenges(
+  user_id: UserDocumentInterface,
+  challenges: ChallengeDocumentInterface[]
+) {
+  for (let index = 0; index < challenges.length; index++) {
+    await Challenge.updateOne(
+      { _id: challenges[index] },
+      {
+        $addToSet: {
+          users: user_id,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
   }
 }
 
@@ -477,19 +599,18 @@ async function addIdToTracksHistorical(
   tracks_historical: HistoricalElementDocumentInterface[]
 ) {
   for (let index = 0; index < tracks_historical.length; index++) {
-    const historical_track = await Track.findById(
-      tracks_historical[index].track
+    await Track.updateOne(
+      { _id: tracks_historical[index].track },
+      {
+        $addToSet: {
+          users: user_id,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
     );
-    if (historical_track) {
-      await Track.updateOne(
-        { _id: historical_track._id },
-        { users: historical_track.users.concat([user_id]) },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-    }
   }
 }
 

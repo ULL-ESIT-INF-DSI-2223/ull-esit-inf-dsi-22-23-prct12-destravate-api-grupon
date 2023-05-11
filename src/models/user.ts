@@ -5,6 +5,7 @@ import {
   HistoricalElementSchema,
 } from "./historical_element.js";
 import { GroupDocumentInterface } from "./group.js";
+import { ChallengeDocumentInterface } from "./challenge.js";
 
 export interface UserDocumentInterface extends Document {
   id: string;
@@ -14,7 +15,7 @@ export interface UserDocumentInterface extends Document {
   groups: GroupDocumentInterface[];
   statistics: [[number, number], [number, number], [number, number]];
   favourite_tracks: TrackDocumentInterface[];
-  active_challenges: number[];
+  active_challenges: ChallengeDocumentInterface[];
   tracks_historical: HistoricalElementDocumentInterface[];
 }
 
@@ -90,7 +91,7 @@ const UserSchema = new Schema<UserDocumentInterface>({
     ref: "Track",
   },
   active_challenges: {
-    type: [Number],
+    type: [Schema.Types.ObjectId],
     required: true,
   },
   tracks_historical: {

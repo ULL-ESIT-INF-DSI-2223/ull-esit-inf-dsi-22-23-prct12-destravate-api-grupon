@@ -5,6 +5,7 @@ import {
   HistoricalElement,
   HistoricalElementDocumentInterface,
 } from "../models/historical_element.js";
+import { Group, GroupDocumentInterface } from "../models/group.js";
 
 export const userRouter = express.Router();
 
@@ -12,10 +13,12 @@ userRouter.post("/users", async (req, res) => {
   try {
     // Checks if elements from body exists in database
     let friends: UserDocumentInterface[] = [];
+    let groups: GroupDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
     let tracks_historical: HistoricalElementDocumentInterface[] = [];
     try {
       friends = await checkFriends(req.body.friends);
+      groups = await checkGroups(req.body.groups);
       favourite_tracks = await checkFavouriteTracks(req.body.favourite_tracks);
       tracks_historical = await checkTracksHistorical(
         req.body.tracks_historical
@@ -29,6 +32,7 @@ userRouter.post("/users", async (req, res) => {
     const user = new User({
       ...req.body,
       friends: friends,
+      groups: groups,
       favourite_tracks: favourite_tracks,
       tracks_historical: tracks_historical,
     });
@@ -40,11 +44,16 @@ userRouter.post("/users", async (req, res) => {
     // Adds the user database id to the other schemas
     if (user_saved) {
       addIdToFriends(user_saved._id, user_saved.friends);
+      addIdToGroups(user_saved._id, user_saved.groups);
       addIdToTracksHistorical(user_saved._id, user_saved.tracks_historical);
     }
 
     await user.populate({
       path: "friends",
+      select: ["id", "name"],
+    });
+    await user.populate({
+      path: "groups",
       select: ["id", "name"],
     });
     await user.populate({
@@ -353,60 +362,6 @@ async function deleteUser(userID?: string, userName?: string) {
   });
   return user;
 }
-/**
- * Funtion that given an user and a trackID, it deletes de user from the record of the track
- *
- */
-async function deleteUserFromTrackRecord(
-  user: UserDocumentInterface,
-  user_historical: HistoricalElementDocumentInterface[]
-) {
-  for (let i = 0; i < user_historical.length; i++) {
-    const track = await Track.findById(user_historical[i].track);
-    const new__track_user_list: UserDocumentInterface[] = [];
-    if (track !== null) {
-      for (let i = 0; i < track.users.length; i++) {
-        if (!track.users[i].equals(user._id)) {
-          new__track_user_list.push(track.users[i]);
-        }
-      }
-      await Track.findByIdAndUpdate(
-        user_historical[i].track,
-        { users: new__track_user_list },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-    }
-  }
-}
-
-async function deleteUserFromFriends(
-  user: UserDocumentInterface,
-  friends: UserDocumentInterface[]
-) {
-  for (let i = 0; i < friends.length; i++) {
-    const user_friend = await User.findById(friends[i]);
-    const new_user_list: UserDocumentInterface[] = [];
-
-    if (user_friend !== null) {
-      for (let j = 0; j < user_friend.friends.length; j++) {
-        if (!user_friend.friends[j].equals(user._id)) {
-          new_user_list.push(user_friend.friends[j]);
-        }
-      }
-      await User.findByIdAndUpdate(
-        user_friend._id,
-        { friends: new_user_list },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
-    }
-  }
-}
 
 async function checkFriends(body_friends: string[]) {
   const friends: UserDocumentInterface[] = [];
@@ -421,6 +376,21 @@ async function checkFriends(body_friends: string[]) {
     }
   }
   return friends;
+}
+
+async function checkGroups(body_groups: number[]) {
+  const groups: GroupDocumentInterface[] = [];
+  for (let index = 0; index < body_groups.length; index++) {
+    const group = await Group.findOne({
+      id: body_groups[index],
+    });
+    if (!group) {
+      throw new Error(`El grupo ${index} del usuario introducido no existe`);
+    } else {
+      groups.push(group._id);
+    }
+  }
+  return groups;
 }
 
 async function checkFavouriteTracks(body_favourite_tracks: number[]) {
@@ -483,6 +453,25 @@ async function addIdToFriends(
   }
 }
 
+async function addIdToGroups(
+  user_id: UserDocumentInterface,
+  groups: GroupDocumentInterface[]
+) {
+  for (let index = 0; index < groups.length; index++) {
+    const group = await Group.findById(groups[index]);
+    if (group) {
+      await Group.updateOne(
+        { _id: group._id },
+        { participants: group.participants.concat([user_id]) },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+    }
+  }
+}
+
 async function addIdToTracksHistorical(
   user_id: UserDocumentInterface,
   tracks_historical: HistoricalElementDocumentInterface[]
@@ -495,6 +484,61 @@ async function addIdToTracksHistorical(
       await Track.updateOne(
         { _id: historical_track._id },
         { users: historical_track.users.concat([user_id]) },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+    }
+  }
+}
+
+/**
+ * Funtion that given an user and a trackID, it deletes de user from the record of the track
+ *
+ */
+async function deleteUserFromTrackRecord(
+  user: UserDocumentInterface,
+  user_historical: HistoricalElementDocumentInterface[]
+) {
+  for (let i = 0; i < user_historical.length; i++) {
+    const track = await Track.findById(user_historical[i].track);
+    const new__track_user_list: UserDocumentInterface[] = [];
+    if (track !== null) {
+      for (let i = 0; i < track.users.length; i++) {
+        if (!track.users[i].equals(user._id)) {
+          new__track_user_list.push(track.users[i]);
+        }
+      }
+      await Track.findByIdAndUpdate(
+        user_historical[i].track,
+        { users: new__track_user_list },
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+    }
+  }
+}
+
+async function deleteUserFromFriends(
+  user: UserDocumentInterface,
+  friends: UserDocumentInterface[]
+) {
+  for (let i = 0; i < friends.length; i++) {
+    const user_friend = await User.findById(friends[i]);
+    const new_user_list: UserDocumentInterface[] = [];
+
+    if (user_friend !== null) {
+      for (let j = 0; j < user_friend.friends.length; j++) {
+        if (!user_friend.friends[j].equals(user._id)) {
+          new_user_list.push(user_friend.friends[j]);
+        }
+      }
+      await User.findByIdAndUpdate(
+        user_friend._id,
+        { friends: new_user_list },
         {
           new: true,
           runValidators: true,

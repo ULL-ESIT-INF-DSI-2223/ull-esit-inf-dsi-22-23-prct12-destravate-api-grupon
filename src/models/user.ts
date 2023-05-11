@@ -4,13 +4,14 @@ import {
   HistoricalElementDocumentInterface,
   HistoricalElementSchema,
 } from "./historical_element.js";
+import { GroupDocumentInterface } from "./group.js";
 
 export interface UserDocumentInterface extends Document {
   id: string;
   name: string;
   activity_type: "Correr" | "Bicicleta";
   friends: UserDocumentInterface[];
-  groups: number[];
+  groups: GroupDocumentInterface[];
   statistics: [[number, number], [number, number], [number, number]];
   favourite_tracks: TrackDocumentInterface[];
   active_challenges: number[];
@@ -41,8 +42,9 @@ const UserSchema = new Schema<UserDocumentInterface>({
     ref: "User",
   },
   groups: {
-    type: [Number],
+    type: [Schema.Types.ObjectId],
     required: true,
+    ref: "Group",
   },
   statistics: {
     type: [[Number]],

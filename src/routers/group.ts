@@ -6,6 +6,7 @@ import {
   HistoricalElementDocumentInterface,
 } from "../models/historical_element.js";
 import { Group, GroupDocumentInterface } from "../models/group.js";
+import { calculateStatistics } from "./user.js";
 
 export const groupRouter = express.Router();
 
@@ -16,13 +17,21 @@ groupRouter.post("/groups", async (req, res) => {
     let ranking: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
     let tracks_historical: HistoricalElementDocumentInterface[] = [];
+    let statistics: number[][] = [
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ];
     try {
-      participants = await checkParticipants(req.body.participants);
-      ranking = await checkRanking(req.body.ranking, participants);
-      favourite_tracks = await checkFavouriteTracks(req.body.favourite_tracks);
-      tracks_historical = await checkTracksHistorical(
+      participants = await getParticipantsDatabaseIDs(req.body.participants);
+      ranking = await createRanking(participants);
+      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+        req.body.favourite_tracks
+      );
+      tracks_historical = await checkTracksHistoricalDatabaseIDs(
         req.body.tracks_historical
       );
+      statistics = await calculateStatistics(tracks_historical);
     } catch (error) {
       return res.status(404).send({
         error: error.message,
@@ -35,15 +44,16 @@ groupRouter.post("/groups", async (req, res) => {
       ranking: ranking,
       favourite_tracks: favourite_tracks,
       tracks_historical: tracks_historical,
+      statistics: statistics,
     });
     await group.save();
 
-    const saved_group = await Group.findOne({
+    const savedGroup = await Group.findOne({
       id: group.id,
     });
     // Adds the user database id to the other schemas
-    if (saved_group) {
-      await addIdToParticipants(saved_group._id, saved_group.participants);
+    if (savedGroup) {
+      await addGroupToParticipants(savedGroup);
     }
 
     await group.populate({
@@ -161,57 +171,72 @@ groupRouter.patch("/groups", async (req, res) => {
     let ranking: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
     let tracks_historical: HistoricalElementDocumentInterface[] = [];
+    let statistics: number[][] = [
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ];
     try {
-      participants = await checkParticipants(req.body.participants);
-      ranking = await checkRanking(req.body.ranking, participants);
-      favourite_tracks = await checkFavouriteTracks(req.body.favourite_tracks);
-      tracks_historical = await checkTracksHistorical(
+      participants = await getParticipantsDatabaseIDs(req.body.participants);
+      ranking = await createRanking(participants);
+      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+        req.body.favourite_tracks
+      );
+      tracks_historical = await checkTracksHistoricalDatabaseIDs(
         req.body.tracks_historical
       );
+      statistics = await calculateStatistics(tracks_historical);
     } catch (error) {
       return res.status(404).send({
         error: error.message,
       });
     }
 
-    const old_group = await Group.findOne({ name: req.query.name.toString() });
-    const new_group = await Group.findOneAndUpdate(
-      { name: req.query.name.toString() },
-      {
-        ...req.body,
-        participants: participants,
-        ranking: ranking,
-        favourite_tracks: favourite_tracks,
-        tracks_historical: tracks_historical,
-      },
-      {
-        new: true,
-        runValidators: true,
+    const groups = await Group.find({ name: req.query.name.toString() });
+    if (groups.length !== 0) {
+      const updatedGroups: GroupDocumentInterface[] = [];
+      for (let index = 0; index < groups.length; index++) {
+        const groupToUpdate = groups[index];
+        const updatedGroup = await Group.findByIdAndUpdate(
+          groupToUpdate._id,
+          {
+            ...req.body,
+            participants: participants,
+            ranking: ranking,
+            favourite_tracks: favourite_tracks,
+            tracks_historical: tracks_historical,
+            statistics: statistics,
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
+        if (updatedGroup) {
+          await deleteGroupFromParticipants(groupToUpdate);
+          await addGroupToParticipants(updatedGroup);
+
+          await updatedGroup.populate({
+            path: "participants",
+            select: ["id", "name"],
+          });
+          await updatedGroup.populate({
+            path: "ranking",
+            select: ["id", "name"],
+          });
+          await updatedGroup.populate({
+            path: "favourite_tracks",
+            select: ["id", "name"],
+          });
+          await updatedGroup.populate({
+            path: "tracks_historical.track",
+            select: ["id", "name"],
+          });
+          updatedGroups.push(updatedGroup);
+        }
       }
-    );
-
-    if (old_group && new_group) {
-      //await deleteUserFromFriends(old_user, old_user.friends);
-      //await deleteUserFromTrackRecord(old_user._id, old_user.tracks_historical);
-      await addIdToParticipants(new_group._id, new_group.participants);
-
-      await new_group.populate({
-        path: "participants",
-        select: ["id", "name"],
-      });
-      await new_group.populate({
-        path: "ranking",
-        select: ["id", "name"],
-      });
-      await new_group.populate({
-        path: "favourite_tracks",
-        select: ["id", "name"],
-      });
-      await new_group.populate({
-        path: "tracks_historical.track",
-        select: ["id", "name"],
-      });
-      return res.send(new_group);
+      return res.send(updatedGroups);
     }
     return res.status(404).send();
   } catch (error) {
@@ -219,7 +244,171 @@ groupRouter.patch("/groups", async (req, res) => {
   }
 });
 
-async function checkParticipants(body_participants: string[]) {
+groupRouter.patch("/groups/:id", async (req, res) => {
+  try {
+    const allowedUpdates = [
+      "name",
+      "participants",
+      "statistics",
+      "ranking",
+      "favourite_tracks",
+      "tracks_historical",
+    ];
+    const actualUpdates = Object.keys(req.body);
+    const isValidUpdate = actualUpdates.every((update) =>
+      allowedUpdates.includes(update)
+    );
+    if (!isValidUpdate) {
+      return res.status(400).send({
+        error: "Actualización no permitida",
+      });
+    }
+
+    // Checks if elements from body exists in database
+    let participants: UserDocumentInterface[] = [];
+    let ranking: UserDocumentInterface[] = [];
+    let favourite_tracks: TrackDocumentInterface[] = [];
+    let tracks_historical: HistoricalElementDocumentInterface[] = [];
+    let statistics: number[][] = [
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ];
+    try {
+      participants = await getParticipantsDatabaseIDs(req.body.participants);
+      ranking = await createRanking(participants);
+      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+        req.body.favourite_tracks
+      );
+      tracks_historical = await checkTracksHistoricalDatabaseIDs(
+        req.body.tracks_historical
+      );
+      statistics = await calculateStatistics(tracks_historical);
+    } catch (error) {
+      return res.status(404).send({
+        error: error.message,
+      });
+    }
+
+    const groupToUpdate = await Group.findOne({ id: req.params.id });
+    const updatedGroup = await Group.findOneAndUpdate(
+      { id: req.params.id },
+      {
+        ...req.body,
+        participants: participants,
+        ranking: ranking,
+        favourite_tracks: favourite_tracks,
+        tracks_historical: tracks_historical,
+        statistics: statistics,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (groupToUpdate && updatedGroup) {
+      await deleteGroupFromParticipants(groupToUpdate);
+      await addGroupToParticipants(updatedGroup);
+
+      await updatedGroup.populate({
+        path: "participants",
+        select: ["id", "name"],
+      });
+      await updatedGroup.populate({
+        path: "ranking",
+        select: ["id", "name"],
+      });
+      await updatedGroup.populate({
+        path: "favourite_tracks",
+        select: ["id", "name"],
+      });
+      await updatedGroup.populate({
+        path: "tracks_historical.track",
+        select: ["id", "name"],
+      });
+      return res.send(updatedGroup);
+    }
+    return res.status(404).send();
+  } catch (error) {
+    return res.status(500).send(error);
+  }
+});
+
+groupRouter.delete("/groups", async (req, res) => {
+  try {
+    if (!req.query.name) {
+      return res.status(400).send({
+        error: "Se debe proveer el nombre del grupo",
+      });
+    }
+
+    const groups = await Group.find({
+      name: req.query.name.toString(),
+    });
+    if (groups) {
+      for (let index = 0; index < groups.length; index++) {
+        const deletedGroup = await Group.findByIdAndDelete(groups[index]._id);
+        if (!deletedGroup) return res.status(404).send();
+
+        await deleteGroupFromParticipants(deletedGroup);
+        await groups[index].populate({
+          path: "participants",
+          select: ["id", "name"],
+        });
+        await groups[index].populate({
+          path: "ranking",
+          select: ["id", "name"],
+        });
+        await groups[index].populate({
+          path: "favourite_tracks",
+          select: ["id", "name"],
+        });
+        await groups[index].populate({
+          path: "tracks_historical.track",
+          select: ["id", "name"],
+        });
+      }
+      return res.send(groups);
+    }
+    return res.status(404).send();
+  } catch (error) {
+    return res.status(500).send(error);
+  }
+});
+
+groupRouter.delete("/groups/:id", async (req, res) => {
+  try {
+    const deletedGroup = await Group.findOneAndDelete({ id: req.params.id });
+
+    if (deletedGroup) {
+      await deleteGroupFromParticipants(deletedGroup);
+
+      await deletedGroup.populate({
+        path: "participants",
+        select: ["id", "name"],
+      });
+      await deletedGroup.populate({
+        path: "ranking",
+        select: ["id", "name"],
+      });
+      await deletedGroup.populate({
+        path: "favourite_tracks",
+        select: ["id", "name"],
+      });
+      await deletedGroup.populate({
+        path: "tracks_historical.track",
+        select: ["id", "name"],
+      });
+      return res.send(deletedGroup);
+    }
+    return res.status(404).send();
+  } catch (error) {
+    return res.status(500).send(error);
+  }
+});
+
+async function getParticipantsDatabaseIDs(body_participants: string[]) {
   body_participants = body_participants.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
   });
@@ -239,37 +428,40 @@ async function checkParticipants(body_participants: string[]) {
   return participants;
 }
 
-async function checkRanking(
-  body_ranking: string[],
-  participants: UserDocumentInterface[]
-) {
-  body_ranking = body_ranking.filter(function (elem, index, self) {
-    return index === self.indexOf(elem);
-  });
-  const ranking: UserDocumentInterface[] = [];
-  for (let index = 0; index < body_ranking.length; index++) {
-    const ranking_member = await User.findOne({
-      id: body_ranking[index],
-    });
-    if (!ranking_member) {
-      throw new Error(
-        `El participante ${index} del ranking del grupo introducido no existe`
-      );
-    } else if (
-      participants.filter((element) => element.equals(ranking_member._id))
-        .length === 0
-    ) {
-      throw new Error(
-        `El participante ${index} del ranking no se encontró en el grupo`
-      );
-    } else {
-      ranking.push(ranking_member._id);
+async function createRanking(participants: UserDocumentInterface[]) {
+  let ranking_data: [UserDocumentInterface, number][] = [];
+  for (let i = 0; i < participants.length; i++) {
+    const participant = await User.findById(participants[i]._id);
+    let total_length = 0;
+    if (participant) {
+      for (let j = 0; j < participant.tracks_historical.length; j++) {
+        const track = await Track.findById(
+          participant.tracks_historical[j].track
+        );
+        if (track) {
+          total_length += track.length;
+        }
+      }
+      ranking_data.push([participant._id, total_length]);
     }
   }
+  ranking_data = ranking_data.sort((element1, element2) => {
+    if (element1[1] > element2[1]) {
+      return -1;
+    }
+    if (element1[1] < element2[1]) {
+      return 1;
+    }
+    return 0;
+  });
+  const ranking: UserDocumentInterface[] = [];
+  ranking_data.forEach((element) => {
+    ranking.push(element[0]);
+  });
   return ranking;
 }
 
-async function checkFavouriteTracks(body_favourite_tracks: number[]) {
+async function getFavouriteTracksDatabaseIDs(body_favourite_tracks: number[]) {
   body_favourite_tracks = body_favourite_tracks.filter(function (
     elem,
     index,
@@ -277,61 +469,75 @@ async function checkFavouriteTracks(body_favourite_tracks: number[]) {
   ) {
     return index === self.indexOf(elem);
   });
-  const favourite_tracks: TrackDocumentInterface[] = [];
+  const favouriteTracks: TrackDocumentInterface[] = [];
   for (let index = 0; index < body_favourite_tracks.length; index++) {
-    const favourite_track = await Track.findOne({
+    const favouriteTrack = await Track.findOne({
       id: body_favourite_tracks[index],
     });
-    if (!favourite_track) {
+    if (!favouriteTrack) {
       throw new Error(
         `La ruta favorita ${index} del grupo introducido no existe`
       );
     } else {
-      favourite_tracks.push(favourite_track._id);
+      favouriteTracks.push(favouriteTrack._id);
     }
   }
-  return favourite_tracks;
+  return favouriteTracks;
 }
 
-async function checkTracksHistorical(
+async function checkTracksHistoricalDatabaseIDs(
   body_tracks_historical: HistoricalElementDocumentInterface[]
 ) {
-  const tracks_historical: HistoricalElementDocumentInterface[] = [];
+  const tracksHistorical: HistoricalElementDocumentInterface[] = [];
   for (let index = 0; index < body_tracks_historical.length; index++) {
-    const historical_track = await Track.findOne({
+    const historicalTrack = await Track.findOne({
       id: body_tracks_historical[index].track,
     });
-    if (!historical_track) {
+    if (!historicalTrack) {
       throw new Error(
         `La ruta del histórico ${index} del grupo introducido no existe`
       );
     } else {
-      tracks_historical.push(
+      tracksHistorical.push(
         new HistoricalElement({
           date: body_tracks_historical[index].date,
-          track: historical_track._id,
+          track: historicalTrack._id,
         })
       );
     }
   }
-  return tracks_historical;
+  return tracksHistorical;
 }
 
-async function addIdToParticipants(
-  group_id: GroupDocumentInterface,
-  participants: UserDocumentInterface[]
-) {
-  for (let index = 0; index < participants.length; index++) {
+async function addGroupToParticipants(group: GroupDocumentInterface) {
+  for (let index = 0; index < group.participants.length; index++) {
     await User.updateOne(
-      { _id: participants[index] },
+      { _id: group.participants[index] },
       {
         $addToSet: {
-          groups: group_id,
+          groups: group._id,
         },
       },
       {
         new: true,
         runValidators: true,
+      }
+    );
+  }
+}
+
+/**
+ * Function that given an user , it deletes de user info from all the challenges he is in
+ *
+ */
+async function deleteGroupFromParticipants(group: GroupDocumentInterface) {
+  for (let i = 0; i < group.participants.length; i++) {
+    await User.updateOne(
+      { _id: group.participants[i] },
+      {
+        $pull: {
+          groups: group._id,
+        },
       }
     );
   }

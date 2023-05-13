@@ -10,9 +10,10 @@ import { Challenge, ChallengeDocumentInterface } from "../models/challenge.js";
 
 export const userRouter = express.Router();
 
+// Adds an user
 userRouter.post("/users", async (req, res) => {
   try {
-    // Checks if elements from body exists in database
+    // Checks if elements from body exist and get previous info
     let friends: UserDocumentInterface[] = [];
     let groups: GroupDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
@@ -24,15 +25,15 @@ userRouter.post("/users", async (req, res) => {
       [0, 0],
     ];
     try {
-      friends = await getFriendsDatabaseIDs(req.body.friends);
-      groups = await getGroupsDatabaseIDs(req.body.groups);
-      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+      friends = await getFriendsMongoID(req.body.friends);
+      groups = await getGroupsMongoID(req.body.groups);
+      favourite_tracks = await getFavouriteTracksMongoID(
         req.body.favourite_tracks
       );
-      active_challenges = await getActiveChallengesDatabaseIDs(
+      active_challenges = await getActiveChallengesMongoID(
         req.body.active_challenges
       );
-      tracks_historical = await getTracksInHistoricalDatabaseIDs(
+      tracks_historical = await getTracksInHistoricalMongoID(
         req.body.tracks_historical
       );
       statistics = await calculateStatistics(tracks_historical);
@@ -41,6 +42,7 @@ userRouter.post("/users", async (req, res) => {
         error: error.message,
       });
     }
+
     // Adds the user to the database
     const user = new User({
       ...req.body,
@@ -53,16 +55,11 @@ userRouter.post("/users", async (req, res) => {
     });
     await user.save();
 
-    const savedUser = await User.findOne({
-      id: user.id,
-    });
-    // Adds the user database id to the other schemas
-    if (savedUser) {
-      await addUserToFriends(savedUser);
-      await addUserToGroups(savedUser);
-      await addUserToActiveChallenges(savedUser);
-      await addUserToTracksInHistorical(savedUser);
-    }
+    // Adds the user to the other collections
+    await addUserToFriends(user);
+    await addUserToGroups(user);
+    await addUserToActiveChallenges(user);
+    await addUserToTracksInHistorical(user);
 
     await user.populate({
       path: "friends",
@@ -84,16 +81,19 @@ userRouter.post("/users", async (req, res) => {
       path: "tracks_historical.track",
       select: ["id", "name"],
     });
+
+    // Sends the result to the client
     return res.status(201).send(user);
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Gets users by name
 userRouter.get("/users", async (req, res) => {
   try {
+    // Gets users from the database
     const filter = req.query.name ? { name: req.query.name } : {};
-
     const users = await User.find(filter)
       .populate({
         path: "friends",
@@ -116,6 +116,7 @@ userRouter.get("/users", async (req, res) => {
         select: ["id", "name"],
       });
 
+    // Sends the result to the client
     if (users.length !== 0) {
       return res.send(users);
     }
@@ -125,11 +126,12 @@ userRouter.get("/users", async (req, res) => {
   }
 });
 
+// Gets user by ID
 userRouter.get("/users/:id", async (req, res) => {
   try {
+    // Gets user from the database
     const filter = req.params.id ? { id: req.params.id.toString() } : {};
-
-    const users = await User.find(filter)
+    const user = await User.findOne(filter)
       .populate({
         path: "friends",
         select: ["id", "name"],
@@ -151,8 +153,9 @@ userRouter.get("/users/:id", async (req, res) => {
         select: ["id", "name"],
       });
 
-    if (users.length !== 0) {
-      return res.send(users);
+    // Sends the result to the client
+    if (user) {
+      return res.send(user);
     }
     return res.status(404).send();
   } catch (error) {
@@ -160,6 +163,7 @@ userRouter.get("/users/:id", async (req, res) => {
   }
 });
 
+// Updates users by name
 userRouter.patch("/users", async (req, res) => {
   try {
     if (!req.query.name) {
@@ -168,6 +172,7 @@ userRouter.patch("/users", async (req, res) => {
       });
     }
 
+    // Checks if update is allowed
     const allowedUpdates = [
       "name",
       "activity_type",
@@ -188,7 +193,7 @@ userRouter.patch("/users", async (req, res) => {
       });
     }
 
-    // Checks if elements from body exists in database
+    // Checks if elements from body exist and get previous info
     let friends: UserDocumentInterface[] = [];
     let groups: GroupDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
@@ -200,15 +205,15 @@ userRouter.patch("/users", async (req, res) => {
       [0, 0],
     ];
     try {
-      friends = await getFriendsDatabaseIDs(req.body.friends);
-      groups = await getGroupsDatabaseIDs(req.body.groups);
-      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+      friends = await getFriendsMongoID(req.body.friends);
+      groups = await getGroupsMongoID(req.body.groups);
+      favourite_tracks = await getFavouriteTracksMongoID(
         req.body.favourite_tracks
       );
-      active_challenges = await getActiveChallengesDatabaseIDs(
+      active_challenges = await getActiveChallengesMongoID(
         req.body.active_challenges
       );
-      tracks_historical = await getTracksInHistoricalDatabaseIDs(
+      tracks_historical = await getTracksInHistoricalMongoID(
         req.body.tracks_historical
       );
       statistics = await calculateStatistics(tracks_historical);
@@ -218,10 +223,12 @@ userRouter.patch("/users", async (req, res) => {
       });
     }
 
+    // Finds the users by name
     const users = await User.find({ name: req.query.name.toString() });
     if (users.length !== 0) {
       const updatedUsers: UserDocumentInterface[] = [];
       for (let index = 0; index < users.length; index++) {
+        // Updates an user
         const userToUpdate = users[index];
         const updatedUser = await User.findByIdAndUpdate(
           userToUpdate._id,
@@ -240,10 +247,11 @@ userRouter.patch("/users", async (req, res) => {
           }
         );
 
+        // Updates the user information in the other collections
         if (updatedUser) {
           await deleteUserFromFriends(userToUpdate);
           await deleteUserFromGroups(userToUpdate);
-          await deleteUserFromChallenges(userToUpdate);
+          await deleteUserFromActiveChallenges(userToUpdate);
           await deleteUserFromTracksInHistorical(userToUpdate);
           await addUserToFriends(updatedUser);
           await addUserToGroups(updatedUser);
@@ -273,6 +281,8 @@ userRouter.patch("/users", async (req, res) => {
           updatedUsers.push(updatedUser);
         }
       }
+
+      // Sends the result to the client
       return res.send(updatedUsers);
     }
     return res.status(404).send();
@@ -281,8 +291,10 @@ userRouter.patch("/users", async (req, res) => {
   }
 });
 
+// Updates user by ID
 userRouter.patch("/users/:id", async (req, res) => {
   try {
+    // Checks if update is allowed
     const allowedUpdates = [
       "name",
       "activity_type",
@@ -303,7 +315,7 @@ userRouter.patch("/users/:id", async (req, res) => {
       });
     }
 
-    // Checks if elements from body exists in database
+    // Checks if elements from body exist and get previous info
     let friends: UserDocumentInterface[] = [];
     let groups: GroupDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
@@ -315,15 +327,15 @@ userRouter.patch("/users/:id", async (req, res) => {
       [0, 0],
     ];
     try {
-      friends = await getFriendsDatabaseIDs(req.body.friends);
-      groups = await getGroupsDatabaseIDs(req.body.groups);
-      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+      friends = await getFriendsMongoID(req.body.friends);
+      groups = await getGroupsMongoID(req.body.groups);
+      favourite_tracks = await getFavouriteTracksMongoID(
         req.body.favourite_tracks
       );
-      active_challenges = await getActiveChallengesDatabaseIDs(
+      active_challenges = await getActiveChallengesMongoID(
         req.body.active_challenges
       );
-      tracks_historical = await getTracksInHistoricalDatabaseIDs(
+      tracks_historical = await getTracksInHistoricalMongoID(
         req.body.tracks_historical
       );
       statistics = await calculateStatistics(tracks_historical);
@@ -333,6 +345,7 @@ userRouter.patch("/users/:id", async (req, res) => {
       });
     }
 
+    // Updates the user
     const userToUpdate = await User.findOne({ id: req.params.id.toString() });
     const updatedUser = await User.findOneAndUpdate(
       { id: req.params.id },
@@ -351,10 +364,11 @@ userRouter.patch("/users/:id", async (req, res) => {
       }
     );
 
+    // Updates the user information in the other collections
     if (userToUpdate && updatedUser) {
       await deleteUserFromFriends(userToUpdate);
       await deleteUserFromGroups(userToUpdate);
-      await deleteUserFromChallenges(userToUpdate);
+      await deleteUserFromActiveChallenges(userToUpdate);
       await deleteUserFromTracksInHistorical(userToUpdate);
       await addUserToFriends(updatedUser);
       await addUserToGroups(updatedUser);
@@ -381,6 +395,8 @@ userRouter.patch("/users/:id", async (req, res) => {
         path: "tracks_historical.track",
         select: ["id", "name"],
       });
+
+      // Sends the result to the client
       return res.send(updatedUser);
     }
     return res.status(404).send();
@@ -389,74 +405,72 @@ userRouter.patch("/users/:id", async (req, res) => {
   }
 });
 
+// Deletes users by name
 userRouter.delete("/users", async (req, res) => {
   try {
     if (!req.query.name) {
       return res.status(400).send({
         error: "Se debe proveer el nombre de usuario",
       });
-    } else {
-      try {
-        const users = await User.find({ name: req.query.name.toString() });
-        if (users) {
-          for (let i = 0; i < users.length; i++) {
-            const deletedUser = await User.findByIdAndDelete(users[i]._id);
-            if (!deletedUser) return res.status(404).send();
-
-            await deleteUserFromFriends(deletedUser);
-            //Check user groups and removes himself
-            await deleteUserFromGroups(deletedUser);
-            await deleteUserFromChallenges(deletedUser);
-            //Check and delete user from Track record
-            await deleteUserFromTracksInHistorical(deletedUser);
-            await users[i].populate({
-              path: "friends",
-              select: ["id", "name"],
-            });
-            await users[i].populate({
-              path: "groups",
-              select: ["id", "name"],
-            });
-            await users[i].populate({
-              path: "favourite_tracks",
-              select: ["id", "name"],
-            });
-            await users[i].populate({
-              path: "active_challenges",
-              select: ["id", "name"],
-            });
-            await users[i].populate({
-              path: "tracks_historical.track",
-              select: ["id", "name"],
-            });
-          }
-          return res.send(users);
-        }
-        return res.status(404).send();
-      } catch (error) {
-        return res.status(500).send(error);
-      }
     }
+
+    // Finds the users by name
+    const users = await User.find({ name: req.query.name.toString() });
+    if (users) {
+      for (let i = 0; i < users.length; i++) {
+        // Deletes an user
+        const deletedUser = await User.findByIdAndDelete(users[i]._id);
+        if (!deletedUser) return res.status(404).send();
+
+        // Deletes the user information in the other collections
+        await deleteUserFromFriends(deletedUser);
+        await deleteUserFromGroups(deletedUser);
+        await deleteUserFromActiveChallenges(deletedUser);
+        await deleteUserFromTracksInHistorical(deletedUser);
+
+        await users[i].populate({
+          path: "friends",
+          select: ["id", "name"],
+        });
+        await users[i].populate({
+          path: "groups",
+          select: ["id", "name"],
+        });
+        await users[i].populate({
+          path: "favourite_tracks",
+          select: ["id", "name"],
+        });
+        await users[i].populate({
+          path: "active_challenges",
+          select: ["id", "name"],
+        });
+        await users[i].populate({
+          path: "tracks_historical.track",
+          select: ["id", "name"],
+        });
+      }
+      // Sends the result to the client
+      return res.send(users);
+    }
+    return res.status(404).send();
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Deletes user by ID
 userRouter.delete("/users/:id", async (req, res) => {
   try {
+    // Deletes the user
     const deletedUser = await User.findOneAndDelete({
       id: req.params.id.toString(),
     });
 
     if (deletedUser) {
+      // Deletes the user information in the other collections
       await deleteUserFromFriends(deletedUser);
-
-      //Check user groups and removes himself
       await deleteUserFromGroups(deletedUser);
-
-      await deleteUserFromChallenges(deletedUser);
-
-      //Check and delete user from Track record
+      await deleteUserFromActiveChallenges(deletedUser);
       await deleteUserFromTracksInHistorical(deletedUser);
 
       await deletedUser.populate({
@@ -479,6 +493,7 @@ userRouter.delete("/users/:id", async (req, res) => {
         path: "tracks_historical.track",
         select: ["id", "name"],
       });
+      // Sends the result to the client
       return res.send(deletedUser);
     }
     return res.status(404).send();
@@ -488,13 +503,16 @@ userRouter.delete("/users/:id", async (req, res) => {
 });
 
 /**
- * Function that given a posible list of friends of a user, checks if all exists
- *
+ * Checks if the friends of the body exist and returns their Mongo ID
+ * @param body_friends IDs of the friends to check
+ * @returns Mongo ID of the friends
  */
-async function getFriendsDatabaseIDs(body_friends: string[]) {
+async function getFriendsMongoID(body_friends: string[]) {
+  // Filters repeated IDs
   body_friends = body_friends.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const friends: UserDocumentInterface[] = [];
   for (let index = 0; index < body_friends.length; index++) {
     const friend = await User.findOne({
@@ -510,13 +528,16 @@ async function getFriendsDatabaseIDs(body_friends: string[]) {
 }
 
 /**
- * Function that given a posible list of groups of a user, checks if all exists
- *
+ * Checks if the groups of the body exist and returns their Mongo ID
+ * @param body_groups IDs of the groups to check
+ * @returns Mongo ID of the groups
  */
-async function getGroupsDatabaseIDs(body_groups: number[]) {
+async function getGroupsMongoID(body_groups: number[]) {
+  // Filters repeated IDs
   body_groups = body_groups.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const groups: GroupDocumentInterface[] = [];
   for (let index = 0; index < body_groups.length; index++) {
     const group = await Group.findOne({
@@ -532,10 +553,12 @@ async function getGroupsDatabaseIDs(body_groups: number[]) {
 }
 
 /**
- * Function that given a posible list of challenges of a user, checks if all exists
- *
+ * Checks if the favourite tracks of the body exist and returns their Mongo ID
+ * @param body_favourite_tracks IDs of the favourite tracks to check
+ * @returns Mongo ID of the favourite tracks
  */
-async function getFavouriteTracksDatabaseIDs(body_favourite_tracks: number[]) {
+async function getFavouriteTracksMongoID(body_favourite_tracks: number[]) {
+  // Filters repeated IDs
   body_favourite_tracks = body_favourite_tracks.filter(function (
     elem,
     index,
@@ -543,6 +566,7 @@ async function getFavouriteTracksDatabaseIDs(body_favourite_tracks: number[]) {
   ) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const favouriteTracks: TrackDocumentInterface[] = [];
   for (let index = 0; index < body_favourite_tracks.length; index++) {
     const favouriteTrack = await Track.findOne({
@@ -560,12 +584,12 @@ async function getFavouriteTracksDatabaseIDs(body_favourite_tracks: number[]) {
 }
 
 /**
- * Function that given a posible list of challenges of a user, checks if all exists
- *
+ * Checks if the active challenges of the body exist and returns their Mongo ID
+ * @param body_active_challenges IDs of the active challenges to check
+ * @returns Mongo ID of the active challenges
  */
-async function getActiveChallengesDatabaseIDs(
-  body_active_challenges: number[]
-) {
+async function getActiveChallengesMongoID(body_active_challenges: number[]) {
+  // Filters repeated IDs
   body_active_challenges = body_active_challenges.filter(function (
     elem,
     index,
@@ -573,6 +597,7 @@ async function getActiveChallengesDatabaseIDs(
   ) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const activeChallenges: ChallengeDocumentInterface[] = [];
   for (let index = 0; index < body_active_challenges.length; index++) {
     const activeChallenge = await Challenge.findOne({
@@ -590,10 +615,11 @@ async function getActiveChallengesDatabaseIDs(
 }
 
 /**
- * Function that given a posible track historical of a user, checks if all traks exists
- *
+ * Checks if the tracks in historical of the body exist and returns their Mongo ID
+ * @param body_tracks_historical IDs of the tracks in historical to check
+ * @returns Mongo ID of the tracks in historical
  */
-async function getTracksInHistoricalDatabaseIDs(
+async function getTracksInHistoricalMongoID(
   body_tracks_historical: HistoricalElementDocumentInterface[]
 ) {
   const tracksHistorical: HistoricalElementDocumentInterface[] = [];
@@ -618,8 +644,9 @@ async function getTracksInHistoricalDatabaseIDs(
 }
 
 /**
- * Function that given a posible track historical of a user, checks if all traks exists
- *
+ * Calculates the user statistics based on the historical
+ * @param tracks_historical Tracks historical
+ * @returns User statistics
  */
 export async function calculateStatistics(
   tracks_historical: HistoricalElementDocumentInterface[]
@@ -661,8 +688,8 @@ export async function calculateStatistics(
 }
 
 /**
- * Function that given an user , it adds the info of the user to all his friends
- *
+ * Adds the user info to all its friends
+ * @param user User to add
  */
 async function addUserToFriends(user: UserDocumentInterface) {
   for (let index = 0; index < user.friends.length; index++) {
@@ -682,8 +709,8 @@ async function addUserToFriends(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it adds the info of the user to all groups he is in
- *
+ * Adds the user info to all his groups
+ * @param user User to add
  */
 async function addUserToGroups(user: UserDocumentInterface) {
   for (let index = 0; index < user.groups.length; index++) {
@@ -703,8 +730,8 @@ async function addUserToGroups(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it adds the info of the user to all challenges he has participating
- *
+ * Adds the user info to all his active challenges
+ * @param user User to add
  */
 async function addUserToActiveChallenges(user: UserDocumentInterface) {
   for (let index = 0; index < user.active_challenges.length; index++) {
@@ -724,8 +751,8 @@ async function addUserToActiveChallenges(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it adds the info of the user to all tracks he has visited
- *
+ * Adds the user info to all the tracks in his historical
+ * @param user User to add
  */
 async function addUserToTracksInHistorical(user: UserDocumentInterface) {
   for (let index = 0; index < user.tracks_historical.length; index++) {
@@ -745,8 +772,8 @@ async function addUserToTracksInHistorical(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it deletes de user info from all the challenges he is in
- *
+ * Deletes the user info from all his friends
+ * @param user User to delete
  */
 async function deleteUserFromFriends(user: UserDocumentInterface) {
   for (let i = 0; i < user.friends.length; i++) {
@@ -762,10 +789,9 @@ async function deleteUserFromFriends(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it deletes de user info from all the groups he is in
- *
+ * Deletes the user info from all his groups
+ * @param user User to delete
  */
-
 async function deleteUserFromGroups(user: UserDocumentInterface) {
   for (let i = 0; i < user.groups.length; i++) {
     await Group.updateOne(
@@ -781,10 +807,10 @@ async function deleteUserFromGroups(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it deletes de user info from all the challenges he is in
- *
+ * Deletes the user info from all his active challenges
+ * @param user User to delete
  */
-async function deleteUserFromChallenges(user: UserDocumentInterface) {
+async function deleteUserFromActiveChallenges(user: UserDocumentInterface) {
   for (let i = 0; i < user.active_challenges.length; i++) {
     await Challenge.updateOne(
       { _id: user.active_challenges[i] },
@@ -798,8 +824,8 @@ async function deleteUserFromChallenges(user: UserDocumentInterface) {
 }
 
 /**
- * Function that given an user , it deletes de user info from all the tracks in his historical
- *
+ * Deletes the user info from all the tracks in his historical
+ * @param user User to delete
  */
 async function deleteUserFromTracksInHistorical(user: UserDocumentInterface) {
   for (let i = 0; i < user.tracks_historical.length; i++) {

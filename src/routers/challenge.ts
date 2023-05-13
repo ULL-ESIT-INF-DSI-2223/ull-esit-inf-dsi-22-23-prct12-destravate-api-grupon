@@ -5,14 +5,16 @@ import { Challenge, ChallengeDocumentInterface } from "../models/challenge.js";
 
 export const challengeRouter = express.Router();
 
+// Adds a challenge
 challengeRouter.post("/challenges", async (req, res) => {
   try {
+    // Checks if elements from body exist and get previous info
     let tracks: TrackDocumentInterface[] = [];
     let users: UserDocumentInterface[] = [];
     let length = 0;
     try {
-      tracks = await getTracksDatabaseIDs(req.body.tracks);
-      users = await getUsersDatabaseIDs(req.body.users);
+      tracks = await getTracksMongoID(req.body.tracks);
+      users = await getUsersMongoID(req.body.users);
       length = await calculateTotalLength(tracks);
     } catch (error) {
       return res.status(404).send({
@@ -20,6 +22,7 @@ challengeRouter.post("/challenges", async (req, res) => {
       });
     }
 
+    // Adds the challenge to the database
     const challenge = new Challenge({
       ...req.body,
       tracks: tracks,
@@ -27,13 +30,9 @@ challengeRouter.post("/challenges", async (req, res) => {
       length: length,
     });
     await challenge.save();
-    const savedChallenge = await Challenge.findOne({
-      id: challenge.id,
-    });
-    // Adds the user database id to the other schemas
-    if (savedChallenge) {
-      await addChallengeToUsers(savedChallenge);
-    }
+
+    // Adds the challenge to the other collections
+    await addChallengeToUsers(challenge);
 
     await challenge.populate({
       path: "tracks",
@@ -43,16 +42,19 @@ challengeRouter.post("/challenges", async (req, res) => {
       path: "users",
       select: ["id", "name"],
     });
+
+    // Sends the result to the client
     return res.status(201).send(challenge);
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Gets challenges by name
 challengeRouter.get("/challenges", async (req, res) => {
   try {
+    // Gets challenges from the database
     const filter = req.query.name ? { name: req.query.name } : {};
-
     const challenges = await Challenge.find(filter)
       .populate({
         path: "tracks",
@@ -63,6 +65,7 @@ challengeRouter.get("/challenges", async (req, res) => {
         select: ["id", "name"],
       });
 
+    // Sends the result to the client
     if (challenges.length !== 0) {
       return res.send(challenges);
     }
@@ -72,11 +75,12 @@ challengeRouter.get("/challenges", async (req, res) => {
   }
 });
 
+// Gets challenge by ID
 challengeRouter.get("/challenges/:id", async (req, res) => {
   try {
+    // Gets challenge from the database
     const filter = req.params.id ? { id: req.params.id } : {};
-
-    const challenges = await Challenge.find(filter)
+    const challenge = await Challenge.findOne(filter)
       .populate({
         path: "tracks",
         select: ["id", "name"],
@@ -86,8 +90,9 @@ challengeRouter.get("/challenges/:id", async (req, res) => {
         select: ["id", "name"],
       });
 
-    if (challenges.length !== 0) {
-      return res.send(challenges);
+    // Sends the result to the client
+    if (challenge) {
+      return res.send(challenge);
     }
     return res.status(404).send();
   } catch (error) {
@@ -95,6 +100,7 @@ challengeRouter.get("/challenges/:id", async (req, res) => {
   }
 });
 
+// Updates challenges by name
 challengeRouter.patch("/challenges", async (req, res) => {
   try {
     if (!req.query.name) {
@@ -103,6 +109,7 @@ challengeRouter.patch("/challenges", async (req, res) => {
       });
     }
 
+    // Checks if update is allowed
     const allowedUpdates = [
       "name",
       "tracks",
@@ -120,12 +127,13 @@ challengeRouter.patch("/challenges", async (req, res) => {
       });
     }
 
+    // Checks if elements from body exist and get previous info
     let tracks: TrackDocumentInterface[] = [];
     let users: UserDocumentInterface[] = [];
     let length = 0;
     try {
-      tracks = await getTracksDatabaseIDs(req.body.tracks);
-      users = await getUsersDatabaseIDs(req.body.users);
+      tracks = await getTracksMongoID(req.body.tracks);
+      users = await getUsersMongoID(req.body.users);
       length = await calculateTotalLength(tracks);
     } catch (error) {
       return res.status(404).send({
@@ -133,12 +141,14 @@ challengeRouter.patch("/challenges", async (req, res) => {
       });
     }
 
+    // Finds the challenges by name
     const challenges = await Challenge.find({
       name: req.query.name.toString(),
     });
     if (challenges.length !== 0) {
       const updatedChallenges: ChallengeDocumentInterface[] = [];
       for (let index = 0; index < challenges.length; index++) {
+        // Updates a challenge
         const challengeToUpdate = challenges[index];
         const updatedChallenge = await Challenge.findByIdAndUpdate(
           challengeToUpdate._id,
@@ -154,10 +164,10 @@ challengeRouter.patch("/challenges", async (req, res) => {
           }
         );
 
+        // Updates the challenge information in the other collections
         if (updatedChallenge) {
           await deleteChallengeFromUsers(challengeToUpdate);
           await addChallengeToUsers(updatedChallenge);
-
           await updatedChallenge.populate({
             path: "tracks",
             select: ["id", "name"],
@@ -171,14 +181,17 @@ challengeRouter.patch("/challenges", async (req, res) => {
       }
       return res.send(updatedChallenges);
     }
+    // Sends the result to the client
     return res.status(404).send();
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Updates challenge by ID
 challengeRouter.patch("/challenges/:id", async (req, res) => {
   try {
+    // Checks if update is allowed
     const allowedUpdates = [
       "name",
       "tracks",
@@ -196,12 +209,13 @@ challengeRouter.patch("/challenges/:id", async (req, res) => {
       });
     }
 
+    // Checks if elements from body exist and get previous info
     let tracks: TrackDocumentInterface[] = [];
     let users: UserDocumentInterface[] = [];
     let length = 0;
     try {
-      tracks = await getTracksDatabaseIDs(req.body.tracks);
-      users = await getUsersDatabaseIDs(req.body.users);
+      tracks = await getTracksMongoID(req.body.tracks);
+      users = await getUsersMongoID(req.body.users);
       length = await calculateTotalLength(tracks);
     } catch (error) {
       return res.status(404).send({
@@ -209,6 +223,7 @@ challengeRouter.patch("/challenges/:id", async (req, res) => {
       });
     }
 
+    // Updates the challenge
     const challengeToUpdate = await Challenge.findOne({ id: req.params.id });
     const updatedChallenges = await Challenge.findOneAndUpdate(
       { id: req.params.id },
@@ -224,6 +239,7 @@ challengeRouter.patch("/challenges/:id", async (req, res) => {
       }
     );
 
+    // Updates the challenge information in the other collections
     if (challengeToUpdate && updatedChallenges) {
       await deleteChallengeFromUsers(challengeToUpdate);
       await addChallengeToUsers(updatedChallenges);
@@ -236,6 +252,8 @@ challengeRouter.patch("/challenges/:id", async (req, res) => {
         path: "users",
         select: ["id", "name"],
       });
+
+      // Sends the result to the client
       return res.send(updatedChallenges);
     }
     return res.status(404).send();
@@ -244,6 +262,7 @@ challengeRouter.patch("/challenges/:id", async (req, res) => {
   }
 });
 
+// Deletes challenges by name
 challengeRouter.delete("/challenges", async (req, res) => {
   try {
     if (!req.query.name) {
@@ -252,16 +271,19 @@ challengeRouter.delete("/challenges", async (req, res) => {
       });
     }
 
+    // Finds the challenges by name
     const challenges = await Challenge.find({
       name: req.query.name.toString(),
     });
     if (challenges) {
       for (let index = 0; index < challenges.length; index++) {
+        // Deletes a challenge
         const deletedChallenge = await Challenge.findByIdAndDelete(
           challenges[index]._id
         );
         if (!deletedChallenge) return res.status(404).send();
 
+        // Deletes the challenge information in the other collections
         await deleteChallengeFromUsers(deletedChallenge);
         await challenges[index].populate({
           path: "tracks",
@@ -272,6 +294,7 @@ challengeRouter.delete("/challenges", async (req, res) => {
           select: ["id", "name"],
         });
       }
+      // Sends the result to the client
       return res.send(challenges);
     }
     return res.status(404).send();
@@ -280,13 +303,16 @@ challengeRouter.delete("/challenges", async (req, res) => {
   }
 });
 
+// Deletes challenge by ID
 challengeRouter.delete("/challenges/:id", async (req, res) => {
   try {
+    // Deletes the challenge
     const deletedChallenge = await Challenge.findOneAndDelete({
       id: req.params.id,
     });
 
     if (deletedChallenge) {
+      // Deletes the challenge information in the other collections
       await deleteChallengeFromUsers(deletedChallenge);
 
       await deletedChallenge.populate({
@@ -297,6 +323,7 @@ challengeRouter.delete("/challenges/:id", async (req, res) => {
         path: "users",
         select: ["id", "name"],
       });
+      // Sends the result to the client
       return res.send(deletedChallenge);
     }
     return res.status(404).send();
@@ -305,10 +332,17 @@ challengeRouter.delete("/challenges/:id", async (req, res) => {
   }
 });
 
-async function getTracksDatabaseIDs(body_tracks: number[]) {
+/**
+ * Checks if the tracks of the body exist and returns their Mongo ID
+ * @param body_tracks IDs of the tracks to check
+ * @returns Mongo ID of the tracks
+ */
+async function getTracksMongoID(body_tracks: number[]) {
+  // Filters repeated IDs
   body_tracks = body_tracks.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const tracks: TrackDocumentInterface[] = [];
   for (let index = 0; index < body_tracks.length; index++) {
     const track = await Track.findOne({
@@ -323,10 +357,17 @@ async function getTracksDatabaseIDs(body_tracks: number[]) {
   return tracks;
 }
 
-async function getUsersDatabaseIDs(body_users: string[]) {
+/**
+ * Checks if the users of the body exist and returns their Mongo ID
+ * @param body_users IDs of the users to check
+ * @returns Mongo ID of the users
+ */
+async function getUsersMongoID(body_users: string[]) {
+  // Filters repeated IDs
   body_users = body_users.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const users: UserDocumentInterface[] = [];
   for (let index = 0; index < body_users.length; index++) {
     const user = await User.findOne({
@@ -341,6 +382,11 @@ async function getUsersDatabaseIDs(body_users: string[]) {
   return users;
 }
 
+/**
+ * Sums the length of the tracks to get the total length
+ * @param tracks Tracks of the challenge
+ * @returns Total length of the challenge
+ */
 async function calculateTotalLength(tracks: TrackDocumentInterface[]) {
   let length = 0;
   for (let index = 0; index < tracks.length; index++) {
@@ -354,6 +400,10 @@ async function calculateTotalLength(tracks: TrackDocumentInterface[]) {
   return length;
 }
 
+/**
+ * Adds the challenge info to all the users that are participating
+ * @param challenge Challenge to add
+ */
 async function addChallengeToUsers(challenge: ChallengeDocumentInterface) {
   for (let index = 0; index < challenge.users.length; index++) {
     await User.updateOne(
@@ -372,8 +422,8 @@ async function addChallengeToUsers(challenge: ChallengeDocumentInterface) {
 }
 
 /**
- * Function that given an user , it deletes de user info from all the challenges he is in
- *
+ * Deletes the challenge info from all the users that are participating
+ * @param challenge Challenge to delete
  */
 async function deleteChallengeFromUsers(challenge: ChallengeDocumentInterface) {
   for (let i = 0; i < challenge.users.length; i++) {

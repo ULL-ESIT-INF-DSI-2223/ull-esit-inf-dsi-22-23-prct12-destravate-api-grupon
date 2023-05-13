@@ -6,13 +6,13 @@ import {
   HistoricalElementDocumentInterface,
 } from "../models/historical_element.js";
 import { Group, GroupDocumentInterface } from "../models/group.js";
-import { calculateStatistics } from "./user.js";
 
 export const groupRouter = express.Router();
 
+// Adds a group
 groupRouter.post("/groups", async (req, res) => {
   try {
-    // Checks if elements from body exists in database
+    // Checks if elements from body exist and get previous info
     let participants: UserDocumentInterface[] = [];
     let ranking: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
@@ -23,12 +23,12 @@ groupRouter.post("/groups", async (req, res) => {
       [0, 0],
     ];
     try {
-      participants = await getParticipantsDatabaseIDs(req.body.participants);
+      participants = await getParticipantsMongoID(req.body.participants);
       ranking = await createRanking(participants);
-      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+      favourite_tracks = await getFavouriteTracksMongoID(
         req.body.favourite_tracks
       );
-      tracks_historical = await checkTracksHistoricalDatabaseIDs(
+      tracks_historical = await getTracksInHistoricalMongoID(
         req.body.tracks_historical
       );
       statistics = await calculateStatistics(tracks_historical);
@@ -37,7 +37,8 @@ groupRouter.post("/groups", async (req, res) => {
         error: error.message,
       });
     }
-    // Adds the user to the database
+
+    // Adds the group to the database
     const group = new Group({
       ...req.body,
       participants: participants,
@@ -48,13 +49,8 @@ groupRouter.post("/groups", async (req, res) => {
     });
     await group.save();
 
-    const savedGroup = await Group.findOne({
-      id: group.id,
-    });
-    // Adds the user database id to the other schemas
-    if (savedGroup) {
-      await addGroupToParticipants(savedGroup);
-    }
+    // Adds the group to the other collections
+    await addGroupToParticipants(group);
 
     await group.populate({
       path: "participants",
@@ -72,16 +68,19 @@ groupRouter.post("/groups", async (req, res) => {
       path: "tracks_historical.track",
       select: ["id", "name"],
     });
+
+    // Sends the result to the client
     return res.status(201).send(group);
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Gets groups by name
 groupRouter.get("/groups", async (req, res) => {
   try {
+    // Gets groups from the database
     const filter = req.query.name ? { name: req.query.name } : {};
-
     const groups = await Group.find(filter)
       .populate({
         path: "participants",
@@ -100,6 +99,7 @@ groupRouter.get("/groups", async (req, res) => {
         select: ["id", "name"],
       });
 
+    // Sends the result to the client
     if (groups.length !== 0) {
       return res.send(groups);
     }
@@ -109,11 +109,12 @@ groupRouter.get("/groups", async (req, res) => {
   }
 });
 
+// Gets group by ID
 groupRouter.get("/groups/:id", async (req, res) => {
   try {
+    // Gets group from the database
     const filter = req.params.id ? { id: req.params.id } : {};
-
-    const groups = await Group.find(filter)
+    const group = await Group.findOne(filter)
       .populate({
         path: "participants",
         select: ["id", "name"],
@@ -131,8 +132,9 @@ groupRouter.get("/groups/:id", async (req, res) => {
         select: ["id", "name"],
       });
 
-    if (groups.length !== 0) {
-      return res.send(groups);
+    // Sends the result to the client
+    if (group) {
+      return res.send(group);
     }
     return res.status(404).send();
   } catch (error) {
@@ -140,6 +142,7 @@ groupRouter.get("/groups/:id", async (req, res) => {
   }
 });
 
+// Updates groups by name
 groupRouter.patch("/groups", async (req, res) => {
   try {
     if (!req.query.name) {
@@ -148,6 +151,7 @@ groupRouter.patch("/groups", async (req, res) => {
       });
     }
 
+    // Checks if update is allowed
     const allowedUpdates = [
       "name",
       "participants",
@@ -166,7 +170,7 @@ groupRouter.patch("/groups", async (req, res) => {
       });
     }
 
-    // Checks if elements from body exists in database
+    // Checks if elements from body exist and get previous info
     let participants: UserDocumentInterface[] = [];
     let ranking: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
@@ -177,12 +181,12 @@ groupRouter.patch("/groups", async (req, res) => {
       [0, 0],
     ];
     try {
-      participants = await getParticipantsDatabaseIDs(req.body.participants);
+      participants = await getParticipantsMongoID(req.body.participants);
       ranking = await createRanking(participants);
-      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+      favourite_tracks = await getFavouriteTracksMongoID(
         req.body.favourite_tracks
       );
-      tracks_historical = await checkTracksHistoricalDatabaseIDs(
+      tracks_historical = await getTracksInHistoricalMongoID(
         req.body.tracks_historical
       );
       statistics = await calculateStatistics(tracks_historical);
@@ -192,10 +196,12 @@ groupRouter.patch("/groups", async (req, res) => {
       });
     }
 
+    // Finds the groups by name
     const groups = await Group.find({ name: req.query.name.toString() });
     if (groups.length !== 0) {
       const updatedGroups: GroupDocumentInterface[] = [];
       for (let index = 0; index < groups.length; index++) {
+        // Updates a group
         const groupToUpdate = groups[index];
         const updatedGroup = await Group.findByIdAndUpdate(
           groupToUpdate._id,
@@ -213,6 +219,7 @@ groupRouter.patch("/groups", async (req, res) => {
           }
         );
 
+        // Updates the group information in the other collections
         if (updatedGroup) {
           await deleteGroupFromParticipants(groupToUpdate);
           await addGroupToParticipants(updatedGroup);
@@ -238,14 +245,17 @@ groupRouter.patch("/groups", async (req, res) => {
       }
       return res.send(updatedGroups);
     }
+    // Sends the result to the client
     return res.status(404).send();
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Updates group by ID
 groupRouter.patch("/groups/:id", async (req, res) => {
   try {
+    // Checks if update is allowed
     const allowedUpdates = [
       "name",
       "participants",
@@ -264,7 +274,7 @@ groupRouter.patch("/groups/:id", async (req, res) => {
       });
     }
 
-    // Checks if elements from body exists in database
+    // Checks if elements from body exist and get previous info
     let participants: UserDocumentInterface[] = [];
     let ranking: UserDocumentInterface[] = [];
     let favourite_tracks: TrackDocumentInterface[] = [];
@@ -275,12 +285,12 @@ groupRouter.patch("/groups/:id", async (req, res) => {
       [0, 0],
     ];
     try {
-      participants = await getParticipantsDatabaseIDs(req.body.participants);
+      participants = await getParticipantsMongoID(req.body.participants);
       ranking = await createRanking(participants);
-      favourite_tracks = await getFavouriteTracksDatabaseIDs(
+      favourite_tracks = await getFavouriteTracksMongoID(
         req.body.favourite_tracks
       );
-      tracks_historical = await checkTracksHistoricalDatabaseIDs(
+      tracks_historical = await getTracksInHistoricalMongoID(
         req.body.tracks_historical
       );
       statistics = await calculateStatistics(tracks_historical);
@@ -290,6 +300,7 @@ groupRouter.patch("/groups/:id", async (req, res) => {
       });
     }
 
+    // Updates the group
     const groupToUpdate = await Group.findOne({ id: req.params.id });
     const updatedGroup = await Group.findOneAndUpdate(
       { id: req.params.id },
@@ -307,6 +318,7 @@ groupRouter.patch("/groups/:id", async (req, res) => {
       }
     );
 
+    // Updates the group information in the other collections
     if (groupToUpdate && updatedGroup) {
       await deleteGroupFromParticipants(groupToUpdate);
       await addGroupToParticipants(updatedGroup);
@@ -329,12 +341,14 @@ groupRouter.patch("/groups/:id", async (req, res) => {
       });
       return res.send(updatedGroup);
     }
+    // Sends the result to the client
     return res.status(404).send();
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
+// Deletes groups by name
 groupRouter.delete("/groups", async (req, res) => {
   try {
     if (!req.query.name) {
@@ -343,15 +357,19 @@ groupRouter.delete("/groups", async (req, res) => {
       });
     }
 
+    // Finds the groups by name
     const groups = await Group.find({
       name: req.query.name.toString(),
     });
     if (groups) {
       for (let index = 0; index < groups.length; index++) {
+        // Deletes a group
         const deletedGroup = await Group.findByIdAndDelete(groups[index]._id);
         if (!deletedGroup) return res.status(404).send();
 
+        // Deletes the group information in the other collections
         await deleteGroupFromParticipants(deletedGroup);
+
         await groups[index].populate({
           path: "participants",
           select: ["id", "name"],
@@ -369,6 +387,7 @@ groupRouter.delete("/groups", async (req, res) => {
           select: ["id", "name"],
         });
       }
+      // Sends the result to the client
       return res.send(groups);
     }
     return res.status(404).send();
@@ -377,11 +396,14 @@ groupRouter.delete("/groups", async (req, res) => {
   }
 });
 
+// Deletes group by ID
 groupRouter.delete("/groups/:id", async (req, res) => {
   try {
+    // Deletes the group
     const deletedGroup = await Group.findOneAndDelete({ id: req.params.id });
 
     if (deletedGroup) {
+      // Deletes the group information in the other collections
       await deleteGroupFromParticipants(deletedGroup);
 
       await deletedGroup.populate({
@@ -402,16 +424,24 @@ groupRouter.delete("/groups/:id", async (req, res) => {
       });
       return res.send(deletedGroup);
     }
+    // Sends the result to the client
     return res.status(404).send();
   } catch (error) {
     return res.status(500).send(error);
   }
 });
 
-async function getParticipantsDatabaseIDs(body_participants: string[]) {
+/**
+ * Checks if the participants of the body exist and returns their Mongo ID
+ * @param body_participants IDs of the participants to check
+ * @returns Mongo ID of the participants
+ */
+async function getParticipantsMongoID(body_participants: string[]) {
+  // Filters repeated IDs
   body_participants = body_participants.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
   });
+  // Checks the IDs
   const participants: UserDocumentInterface[] = [];
   for (let index = 0; index < body_participants.length; index++) {
     const participant = await User.findOne({
@@ -428,40 +458,12 @@ async function getParticipantsDatabaseIDs(body_participants: string[]) {
   return participants;
 }
 
-async function createRanking(participants: UserDocumentInterface[]) {
-  let ranking_data: [UserDocumentInterface, number][] = [];
-  for (let i = 0; i < participants.length; i++) {
-    const participant = await User.findById(participants[i]._id);
-    let total_length = 0;
-    if (participant) {
-      for (let j = 0; j < participant.tracks_historical.length; j++) {
-        const track = await Track.findById(
-          participant.tracks_historical[j].track
-        );
-        if (track) {
-          total_length += track.length;
-        }
-      }
-      ranking_data.push([participant._id, total_length]);
-    }
-  }
-  ranking_data = ranking_data.sort((element1, element2) => {
-    if (element1[1] > element2[1]) {
-      return -1;
-    }
-    if (element1[1] < element2[1]) {
-      return 1;
-    }
-    return 0;
-  });
-  const ranking: UserDocumentInterface[] = [];
-  ranking_data.forEach((element) => {
-    ranking.push(element[0]);
-  });
-  return ranking;
-}
-
-async function getFavouriteTracksDatabaseIDs(body_favourite_tracks: number[]) {
+/**
+ * Checks if the favourite tracks of the body exist and returns their Mongo ID
+ * @param body_favourite_tracks IDs of the favourite tracks to check
+ * @returns Mongo ID of the favourite tracks
+ */
+async function getFavouriteTracksMongoID(body_favourite_tracks: number[]) {
   body_favourite_tracks = body_favourite_tracks.filter(function (
     elem,
     index,
@@ -485,7 +487,12 @@ async function getFavouriteTracksDatabaseIDs(body_favourite_tracks: number[]) {
   return favouriteTracks;
 }
 
-async function checkTracksHistoricalDatabaseIDs(
+/**
+ * Checks if the tracks in historical of the body exist and returns their Mongo ID
+ * @param body_tracks_historical IDs of the tracks in historical to check
+ * @returns Mongo ID of the tracks in historical
+ */
+async function getTracksInHistoricalMongoID(
   body_tracks_historical: HistoricalElementDocumentInterface[]
 ) {
   const tracksHistorical: HistoricalElementDocumentInterface[] = [];
@@ -509,6 +516,95 @@ async function checkTracksHistoricalDatabaseIDs(
   return tracksHistorical;
 }
 
+/**
+ * Creates the ranking of the participants based on the kilometers traveled
+ * @param participants Participants of the group
+ * @returns Sorted ranking from best to worst
+ */
+async function createRanking(participants: UserDocumentInterface[]) {
+  // Fills ranking_data with the participants and their total kilometers
+  let ranking_data: [UserDocumentInterface, number][] = [];
+  for (let i = 0; i < participants.length; i++) {
+    const participant = await User.findById(participants[i]._id);
+    let total_kilometers = 0;
+    if (participant) {
+      for (let j = 0; j < participant.tracks_historical.length; j++) {
+        const track = await Track.findById(
+          participant.tracks_historical[j].track
+        );
+        if (track) {
+          total_kilometers += track.length;
+        }
+      }
+      ranking_data.push([participant._id, total_kilometers]);
+    }
+  }
+  // Sorts ranking_data by total kilometers
+  ranking_data = ranking_data.sort((element1, element2) => {
+    if (element1[1] > element2[1]) {
+      return -1;
+    }
+    if (element1[1] < element2[1]) {
+      return 1;
+    }
+    return 0;
+  });
+  // Fills ranking with ranking_data sorted participants and returns it
+  const ranking: UserDocumentInterface[] = [];
+  ranking_data.forEach((element) => {
+    ranking.push(element[0]);
+  });
+  return ranking;
+}
+
+/**
+ * Calculates the group statistics based on the historical
+ * @param tracks_historical Tracks historical
+ * @returns Group tatistics
+ */
+export async function calculateStatistics(
+  tracks_historical: HistoricalElementDocumentInterface[]
+) {
+  const statistics = [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ];
+  for (let index = 0; index < tracks_historical.length; index++) {
+    const historicalElement: HistoricalElementDocumentInterface =
+      tracks_historical[index];
+    const historicalTrack = await Track.findOne({
+      _id: tracks_historical[index].track,
+    });
+    if (historicalTrack) {
+      const oneYearAgo = new Date();
+      oneYearAgo.setMonth(new Date().getMonth() - 12);
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(new Date().getMonth() - 1);
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(new Date().getDay() - 7);
+
+      if (historicalElement.date >= oneWeekAgo) {
+        statistics[0][0] += historicalTrack?.length;
+        statistics[0][1] += historicalTrack.slope;
+      }
+      if (historicalElement.date >= oneMonthAgo) {
+        statistics[1][0] += historicalTrack?.length;
+        statistics[1][1] += historicalTrack.slope;
+      }
+      if (historicalElement.date >= oneYearAgo) {
+        statistics[2][0] += historicalTrack?.length;
+        statistics[2][1] += historicalTrack.slope;
+      }
+    }
+  }
+  return statistics;
+}
+
+/**
+ * Adds the group info to all the participants
+ * @param group Group to add
+ */
 async function addGroupToParticipants(group: GroupDocumentInterface) {
   for (let index = 0; index < group.participants.length; index++) {
     await User.updateOne(
@@ -527,8 +623,8 @@ async function addGroupToParticipants(group: GroupDocumentInterface) {
 }
 
 /**
- * Function that given an user , it deletes de user info from all the challenges he is in
- *
+ * Deletes the group info from all the participants
+ * @param group Group to delete
  */
 async function deleteGroupFromParticipants(group: GroupDocumentInterface) {
   for (let i = 0; i < group.participants.length; i++) {

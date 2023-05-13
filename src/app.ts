@@ -7,6 +7,7 @@ import { challengeRouter } from "./routers/challenge.js";
 import { defaultRouter } from "./routers/default.js";
 
 export const app = express();
+
 app.use(express.json());
 app.use(trackRouter);
 app.use(userRouter);

@@ -1,6 +1,6 @@
 import { connect } from "mongoose";
 
-const uri = "mongodb://127.0.0.1:27017/destravate-api";
+const uri = "mongodb+srv://destravate:ttt1234@clusterdestravate.ujpp2el.mongodb.net/test";
 
 try {
   await connect(uri);

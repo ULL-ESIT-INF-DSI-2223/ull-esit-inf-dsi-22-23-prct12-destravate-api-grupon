@@ -155,8 +155,6 @@ groupRouter.patch("/groups", async (req, res) => {
     const allowedUpdates = [
       "name",
       "participants",
-      "statistics",
-      "ranking",
       "favourite_tracks",
       "tracks_historical",
     ];
@@ -259,8 +257,6 @@ groupRouter.patch("/groups/:id", async (req, res) => {
     const allowedUpdates = [
       "name",
       "participants",
-      "statistics",
-      "ranking",
       "favourite_tracks",
       "tracks_historical",
     ];
@@ -353,7 +349,7 @@ groupRouter.delete("/groups", async (req, res) => {
   try {
     if (!req.query.name) {
       return res.status(400).send({
-        error: "Se debe proveer el nombre del grupo",
+        error: "Se debe proporcionar un nombre",
       });
     }
 
@@ -361,7 +357,7 @@ groupRouter.delete("/groups", async (req, res) => {
     const groups = await Group.find({
       name: req.query.name.toString(),
     });
-    if (groups) {
+    if (groups.length !== 0) {
       for (let index = 0; index < groups.length; index++) {
         // Deletes a group
         const deletedGroup = await Group.findByIdAndDelete(groups[index]._id);

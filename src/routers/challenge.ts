@@ -267,7 +267,7 @@ challengeRouter.delete("/challenges", async (req, res) => {
   try {
     if (!req.query.name) {
       return res.status(400).send({
-        error: "Se debe proveer el nombre del reto",
+        error: "Se debe proporcionar un nombre",
       });
     }
 
@@ -275,7 +275,7 @@ challengeRouter.delete("/challenges", async (req, res) => {
     const challenges = await Challenge.find({
       name: req.query.name.toString(),
     });
-    if (challenges) {
+    if (challenges.length !== 0) {
       for (let index = 0; index < challenges.length; index++) {
         // Deletes a challenge
         const deletedChallenge = await Challenge.findByIdAndDelete(
@@ -387,7 +387,7 @@ async function getUsersMongoID(body_users: string[]) {
  * @param tracks Tracks of the challenge
  * @returns Total length of the challenge
  */
-async function calculateTotalLength(tracks: TrackDocumentInterface[]) {
+export async function calculateTotalLength(tracks: TrackDocumentInterface[]) {
   let length = 0;
   for (let index = 0; index < tracks.length; index++) {
     const track = await Track.findOne({

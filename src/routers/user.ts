@@ -416,7 +416,7 @@ userRouter.delete("/users", async (req, res) => {
 
     // Finds the users by name
     const users = await User.find({ name: req.query.name.toString() });
-    if (users) {
+    if (users.length !== 0) {
       for (let i = 0; i < users.length; i++) {
         // Deletes an user
         const deletedUser = await User.findByIdAndDelete(users[i]._id);
@@ -507,7 +507,7 @@ userRouter.delete("/users/:id", async (req, res) => {
  * @param body_friends IDs of the friends to check
  * @returns Mongo ID of the friends
  */
-async function getFriendsMongoID(body_friends: string[]) {
+export async function getFriendsMongoID(body_friends: string[]) {
   // Filters repeated IDs
   body_friends = body_friends.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
@@ -532,7 +532,7 @@ async function getFriendsMongoID(body_friends: string[]) {
  * @param body_groups IDs of the groups to check
  * @returns Mongo ID of the groups
  */
-async function getGroupsMongoID(body_groups: number[]) {
+export async function getGroupsMongoID(body_groups: number[]) {
   // Filters repeated IDs
   body_groups = body_groups.filter(function (elem, index, self) {
     return index === self.indexOf(elem);
@@ -557,7 +557,9 @@ async function getGroupsMongoID(body_groups: number[]) {
  * @param body_favourite_tracks IDs of the favourite tracks to check
  * @returns Mongo ID of the favourite tracks
  */
-async function getFavouriteTracksMongoID(body_favourite_tracks: number[]) {
+export async function getFavouriteTracksMongoID(
+  body_favourite_tracks: number[]
+) {
   // Filters repeated IDs
   body_favourite_tracks = body_favourite_tracks.filter(function (
     elem,
@@ -588,7 +590,9 @@ async function getFavouriteTracksMongoID(body_favourite_tracks: number[]) {
  * @param body_active_challenges IDs of the active challenges to check
  * @returns Mongo ID of the active challenges
  */
-async function getActiveChallengesMongoID(body_active_challenges: number[]) {
+export async function getActiveChallengesMongoID(
+  body_active_challenges: number[]
+) {
   // Filters repeated IDs
   body_active_challenges = body_active_challenges.filter(function (
     elem,
@@ -619,7 +623,7 @@ async function getActiveChallengesMongoID(body_active_challenges: number[]) {
  * @param body_tracks_historical IDs of the tracks in historical to check
  * @returns Mongo ID of the tracks in historical
  */
-async function getTracksInHistoricalMongoID(
+export async function getTracksInHistoricalMongoID(
   body_tracks_historical: HistoricalElementDocumentInterface[]
 ) {
   const tracksHistorical: HistoricalElementDocumentInterface[] = [];

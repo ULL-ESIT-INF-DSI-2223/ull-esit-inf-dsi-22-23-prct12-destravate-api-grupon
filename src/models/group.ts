@@ -23,7 +23,7 @@ const GroupSchema = new Schema<GroupDocumentInterface>({
     required: true,
     validate: (value: number) => {
       if (value < 0 || value % 1 !== 0) {
-        throw new Error("El ID de la ruta debe ser un entero positivo");
+        throw new Error("El ID del grupo debe ser un entero positivo");
       }
     },
   },

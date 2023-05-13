@@ -5,6 +5,7 @@ import { Group } from "../models/group.js";
 import { Challenge } from "../models/challenge.js";
 import { HistoricalElementDocumentInterface } from "../models/historical_element.js";
 import { calculateStatistics } from "./user.js";
+import { calculateTotalLength } from "./challenge.js";
 
 export const trackRouter = express.Router();
 
@@ -222,7 +223,7 @@ trackRouter.delete("/tracks", async (req, res) => {
     }
     // Finds the tracks by name
     const tracks = await Track.find({ name: req.query.name.toString() });
-    if (tracks) {
+    if (tracks.length !== 0) {
       // Deletes a track
       for (let index = 0; index < tracks.length; index++) {
         const deletedTrack = await Track.findByIdAndDelete(tracks[index]._id);
@@ -378,8 +379,9 @@ async function deleteTrackFromGroups(track: TrackDocumentInterface) {
  */
 async function deleteTrackFromChallenges(track: TrackDocumentInterface) {
   const challengeList = await Challenge.find();
+
   for (let i = 0; i < challengeList.length; i++) {
-    await Challenge.updateOne(
+    const updatedChallenge = await Challenge.findOneAndUpdate(
       { _id: challengeList[i] },
       {
         $pull: {
@@ -387,5 +389,14 @@ async function deleteTrackFromChallenges(track: TrackDocumentInterface) {
         },
       }
     );
+    if (updatedChallenge) {
+      const newLength = await calculateTotalLength(updatedChallenge.tracks);
+      await Challenge.findOneAndUpdate(
+        { _id: challengeList[i] },
+        {
+          length: newLength,
+        }
+      );
+    }
   }
 }

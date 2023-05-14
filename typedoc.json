@@ -1,6 +1,9 @@
 {
   "entryPoints": [
-    "./src/*"
+    "./src/*.ts",
+    "./src/db/*",
+    "./src/models/*",
+    "./src/routers/*",
   ],
   "out": "./docs"
 }

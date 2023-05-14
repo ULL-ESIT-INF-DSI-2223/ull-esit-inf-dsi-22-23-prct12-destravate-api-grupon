@@ -428,7 +428,7 @@ describe("DELETE /users/:id", () => {
   });
 });
 
-describe("Funciom getActiveChallengesMongoID", () => {
+describe("Función getActiveChallengesMongoID", () => {
   it("Debe eliminar IDs repetidos y comprobar que todos los id son válidos", async () => {
     const response = await request(app)
       .post("/challenges")
@@ -461,7 +461,7 @@ describe("Funciom getActiveChallengesMongoID", () => {
   });
 });
 
-describe("Funciom getFavouriteTracksMongoID", () => {
+describe("Función getFavouriteTracksMongoID", () => {
   it("Debe eliminar IDs repetidos y comprobar que todos los id son válidos", async () => {
     const response = await request(app)
       .post("/tracks")
@@ -495,7 +495,7 @@ describe("Funciom getFavouriteTracksMongoID", () => {
   });
 });
 
-describe("Funciom getGroupsMongoID", () => {
+describe("Función getGroupsMongoID", () => {
   it("Debe eliminar IDs repetidos y comprobar que todos los id son válidos", async () => {
     const response = await request(app)
       .post("/groups")
@@ -529,7 +529,7 @@ describe("Funciom getGroupsMongoID", () => {
   });
 });
 
-describe("Funciom getFriendsMongoID", () => {
+describe("Función getFriendsMongoID", () => {
   it("Debe eliminar IDs repetidos y comprobar que todos los id son válidos", async () => {
     const response = await request(app)
       .post("/users")

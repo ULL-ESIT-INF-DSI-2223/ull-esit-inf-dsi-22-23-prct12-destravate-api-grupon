@@ -6,6 +6,12 @@
 
 ### alu0101239187@ull.edu.es y alu0101405180@ull.edu.es
 
+[![Tests](https://github.com/ULL-ESIT-INF-DSI-2223/ull-esit-inf-dsi-22-23-prct12-destravate-api-grupon/actions/workflows/node.js.yml/badge.svg?branch=main)](https://github.com/ULL-ESIT-INF-DSI-2223/ull-esit-inf-dsi-22-23-prct12-destravate-api-grupon/actions/workflows/node.js.yml)
+
+[![Coveralls](https://github.com/ULL-ESIT-INF-DSI-2223/ull-esit-inf-dsi-22-23-prct12-destravate-api-grupon/actions/workflows/coveralls.yml/badge.svg)](https://github.com/ULL-ESIT-INF-DSI-2223/ull-esit-inf-dsi-22-23-prct12-destravate-api-grupon/actions/workflows/coveralls.yml)
+
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ULL-ESIT-INF-DSI-2223_ull-esit-inf-dsi-22-23-prct12-destravate-api-grupon&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ULL-ESIT-INF-DSI-2223_ull-esit-inf-dsi-22-23-prct12-destravate-api-grupon)
+
 ## Índice
 
 - [Introducción](#introducción)
@@ -13,6 +19,8 @@
   - [Challenge](#challenge)
   - [Group](#group)
   - [Track](#track)
+  - [User](#user)
+  - [Decisiones de diseño](#decisiones-de-diseño)
 - [Conclusión](#conclusión)
 - [Bibliografía](#bibliografía)
 
@@ -25,13 +33,12 @@ Este proyecto consiste en la creación de una API REST haciendo uso de Node/Expr
 - **dist**: Código JavaScript generado
 - **docs**: Documentación del código
 - **src**: Código fuente TypeScript
-  - **db**: Creacíon y conexión con la base de datos
+  - **db**: Creación y conexión con la base de datos
   - **models**: Modelos de los datos
   - **routes**: Manejadores de peticiones separadas por Modelo de Datos
-  - **app**: Aplicación de express
-  - **index**: Servidor
+  - **app.ts**: Aplicación de express
+  - **index.ts**: Servidor
 - **tests**: Tests del código fuente TypeScript
-
 
 ## Práctica
 
@@ -44,10 +51,9 @@ El modelo challenge se utiliza para almacenar los datos de los retos del sistema
 - ID del reto. El esquema controla que sea positivo y entero.
 - Nombre del reto.
 - IDs de la rutas que forman parte del reto. El esquema controla que sean válidos.
-- Tipo de actividad del reto. El cual solo podrá ser o Bicicleta o Correr
+- Tipo de actividad del reto. El cual solo podrá ser o Bicicleta o Correr.
 - Longitud o Kilómetros totales a realizar. El esquema controla que sean positivos.
 - IDs de los usuario que están realizando el reto. El esquema controla que sean válidos.
-
 
 ### Group
 
@@ -60,7 +66,6 @@ El modelo Group se utiliza para almacenar los datos de los grupos del sistema y 
 - Clasificación de los miembros del grupo. El esquema ordena los usuarios en base a sus total de kilómetros recorridos.
 - IDs de las rutas favoritas del grupo. El esquema elimina los IDs repetidos y controla que sean válidos.
 - Historial del grupo. El esquema controla que las fechas no sean futuras y que los IDs de las rutas del historial sean válidos.
-
 
 ### Track
 
@@ -76,7 +81,6 @@ El modelo Track se utiliza para almacenar los datos de los rutas del sistema y c
 - Tipo de actividad que se puede realizar en la ruta. El cual solo podrá ser o Bicicleta o Correr.
 - Calificación media de la ruta. El esquema controla que este entre 0 y 10.
 
-
 ### User
 
 El modelo User se utiliza para almacenar los datos de los usuarios del sistema y cuenta con los siguientes atributos:
@@ -91,27 +95,37 @@ El modelo User se utiliza para almacenar los datos de los usuarios del sistema y
 - IDs de los retos activos del usuario. La clase elimina los IDs repetidos y controla que sean válidos.
 - Historial del usuario. La clase controla que las fechas no sean futuras y que los IDs de las rutas del historial sean válidos.
 
-
 ### Decisiones de diseño
 
-Las decisiones de diseño importantes que hemos tomado son las siguientes:
+Las decisiones de diseño más importantes que hemos tomado son las siguientes:
 
 - En las operaciones de lectura, borrado y modificación por nombre, se realizarán estas acciones en todas las entradas que compartan el mismo nombre en lugar de hacerlo solo en la primera encontrada.
 
-- Al eliminar una ruta, no es posible determinar qué usuarios la tienen en favoritos desde la perspectiva de la ruta. Por lo tanto, es necesario recorrer todos los usuarios y comprobar si tienen la ruta en favoritos, eliminándola del historial en el proceso.
+- Al crear un usuario, sus estadísticas son calculadas de forma automática por la API en base a las rutas de su historial.
 
-- Al eliminar un usuario, se eliminará de la lista de amigos de sus amigos, de todos los grupos a los que pertenezca y del historial de usuarios en las rutas de su historial.
+- Al crear, eliminar o actualizar un usuario, se actualizará su información en la lista de amigos de sus amigos, los grupos a los que pertenezca y el historial de usuarios de las rutas de su historial.
 
-- Al eliminar un grupo, se eliminará de la lista de grupos de todos sus participantes.
+- Al crear un grupo, sus estadísticas son calculadas de forma automática por la API en base a las rutas del historial del grupo. Además, el ranking se ordenará automáticamente en base a las longitudes totales recorridas por los usuarios pertenecientes a este.
 
-- Al eliminar una ruta, esta se eliminará de todos los históricos tanto de usuarios como de grupos, incluyendo sus estadísticas. Además, se eliminará de la lista de favoritos de todos los usuarios y se reducirá la longitud total de los retos en los que esté incluida.
+- Al eliminar una ruta, esta se eliminará de los historiales de todos los usuarios y grupos, además de de las rutas favoritas. También se recalcularán las estadísticas de los usuarios y los grupos y el ranking de estos últimos.
 
-- Al eliminar un reto, la información correspondiente también se eliminará de los usuarios que estaban participando en él.
+- Al crear, eliminar o actualizar un grupo, se actualizará su información en la lista de grupos de todos sus participantes.
+
+- Al crear, eliminar o actualizar un reto, la información correspondiente se actualizará en los usuarios que estaban participando en él.
 
 - Las coordenadas de las rutas se siguen el estándar de coordenadas geográficas, donde los valores de latitud se miden respecto al ecuador y varían desde -90° en el polo sur hasta +90° en el polo norte. Los valores de longitud se miden respecto al meridiano base y van desde -180° en el oeste hasta 180° en el este. Estas coordenadas se guardan en duplas, en el formato [latitud, longitud].
 
-- Para el histórico de usuarios y grupos, se utilizan duplas que contienen la fecha (de la clase Date) y una referencia al track correspondiente en la base de datos.
+- Para el historial de usuarios y grupos, se utilizan duplas que contienen la fecha (de la clase Date) y una referencia al track correspondiente en la base de datos.
 
 ## Conclusión
 
+Esta práctica ha sido un acercamiento más próximo a la creación de un programa real que las que hemos venido haciendo hasta ahora. Su complejidad era mucho mayor, debido al gran número de variables e interconexiones a tener en cuenta, la cantidad de trabajo a realizar y el uso de herramientas asíncronas. Con este proyecto podemos darnos cuenta de la gran utilidad de los gestores de bases de datos, que permiten controlar las relaciones entre entidades de una forma mucho más fiable y sencilla que mediante el código elaborado durante el proyecto.
+
+Además, el desarrollo de la API para llevar a cabo peticiones a dicha base de datos ha sido desafiante debido a las relaciones que existen entre los propios datos y a la complejidad de estas.
+
 ## Bibliografía
+
+- [Desarrollo de Sistemas Informáticos - Práctica 12 - Destravate: API Node/Express](https://ull-esit-inf-dsi-2223.github.io/prct12-destravate-api/)
+- [Desarrollo de Sistemas Informáticos - Node.js](https://ull-esit-inf-dsi-2223.github.io/nodejs-theory/)
+- [MongoDB Atlas](https://www.mongodb.com/es/cloud/atlas/efficiency)
+- [Cyclic](https://www.cyclic.sh)

@@ -22,16 +22,16 @@ jobs:
       - name: Git checkout
         uses: actions/checkout@v3
 
-      - name: Use Node.js $
+      - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
-          node-version: $
+          node-version: ${{ matrix.node-version }}
           cache: "npm"
 
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.9.0
         with:
-          mongodb-version: $
+          mongodb-version: ${{ matrix.mongodb-version }}
 
       - name: Install dependencies
         run: npm i

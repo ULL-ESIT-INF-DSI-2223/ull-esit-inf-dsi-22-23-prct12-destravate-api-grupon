@@ -119,9 +119,9 @@ Las decisiones de diseño más importantes que hemos tomado son las siguientes:
 
 ## Conclusión
 
-Esta práctica ha sido un acercamiento más próximo a la creación de un programa real que las que hemos venido haciendo hasta ahora. Su complejidad era mucho mayor, debido al gran número de variables e interconexiones a tener en cuenta, la cantidad de trabajo a realizar y el uso de herramientas asíncronas. Con este proyecto podemos darnos cuenta de la gran utilidad de los gestores de bases de datos, que permiten controlar las relaciones entre entidades de una forma mucho más fiable y sencilla que mediante el código elaborado durante el proyecto.
+Esta práctica ha sido un acercamiento más próximo a la creación de un programa real que las que hemos venido haciendo hasta ahora. Su complejidad era mucho mayor, debido al gran número de variables e interconexiones a tener en cuenta, la cantidad de trabajo a realizar y el uso de herramientas asíncronas. Con este proyecto podemos darnos cuenta de la gran utilidad de los gestores de bases de datos, que permiten controlar las relaciones entre entidades de una forma mucho más fiable y sencilla que mediante el código elaborado durante el proyecto. Además, el desarrollo de la API para llevar a cabo peticiones a dicha base de datos ha sido desafiante debido a las relaciones que existen entre los propios datos y a la complejidad de estas.
 
-Además, el desarrollo de la API para llevar a cabo peticiones a dicha base de datos ha sido desafiante debido a las relaciones que existen entre los propios datos y a la complejidad de estas.
+La API puede encontrarse desplegada en la siguiente [URL](https://glorious-plum-vest.cyclic.app/).
 
 ## Bibliografía
 

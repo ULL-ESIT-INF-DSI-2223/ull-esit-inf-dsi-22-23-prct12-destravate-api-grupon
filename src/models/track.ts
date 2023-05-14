@@ -73,7 +73,7 @@ const TrackSchema = new Schema<TrackDocumentInterface>({
     required: true,
     validate: (value: number) => {
       if (value <= 0) {
-        throw new Error("El desnivel de la ruta debe ser positiva");
+        throw new Error("El desnivel de la ruta debe ser positivo");
       }
     },
   },

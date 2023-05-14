@@ -7,5 +7,4 @@ try {
   console.log("Conectado al servidor MongoDB");
 } catch (error) {
   console.log("No se pudo conectar al servidor MongoDB");
-  console.log(error);
 }
